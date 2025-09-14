@@ -1,0 +1,139 @@
+{
+  "type": "Program",
+  "functions": [
+    {
+      "type": "FunctionDeclaration",
+      "name": "iterate",
+      "parameters": [
+        [
+          "n"
+        ]
+      ],
+      "localVariables": [
+        [
+          "f"
+        ]
+      ],
+      "body": {
+        "type": "SequenceStatement",
+        "statements": [
+          {
+            "type": "AssignmentStatement",
+            "variable": "f",
+            "expression": {
+              "type": "NumberLiteral",
+              "value": 1
+            }
+          },
+          {
+            "type": "AssignmentStatement",
+            "variable": "t1",
+            "expression": {
+              "type": "BinaryExpression",
+              "operator": ">",
+              "left": {
+                "type": "Variable",
+                "name": "n"
+              },
+              "right": {
+                "type": "NumberLiteral",
+                "value": 0
+              }
+            }
+          },
+          {
+            "type": "WhileStatement",
+            "condition": {
+              "type": "Variable",
+              "name": "t1"
+            },
+            "body": {
+              "type": "SequenceStatement",
+              "statements": [
+                {
+                  "type": "AssignmentStatement",
+                  "variable": "f",
+                  "expression": {
+                    "type": "BinaryExpression",
+                    "operator": "*",
+                    "left": {
+                      "type": "Variable",
+                      "name": "f"
+                    },
+                    "right": {
+                      "type": "Variable",
+                      "name": "n"
+                    }
+                  }
+                },
+                {
+                  "type": "AssignmentStatement",
+                  "variable": "n",
+                  "expression": {
+                    "type": "BinaryExpression",
+                    "operator": "-",
+                    "left": {
+                      "type": "Variable",
+                      "name": "n"
+                    },
+                    "right": {
+                      "type": "NumberLiteral",
+                      "value": 1
+                    }
+                  }
+                },
+                {
+                  "type": "AssignmentStatement",
+                  "variable": "t1",
+                  "expression": {
+                    "type": "BinaryExpression",
+                    "operator": ">",
+                    "left": {
+                      "type": "Variable",
+                      "name": "n"
+                    },
+                    "right": {
+                      "type": "NumberLiteral",
+                      "value": 0
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "returnExpression": {
+        "type": "Variable",
+        "name": "f"
+      }
+    },
+    {
+      "type": "FunctionDeclaration",
+      "name": "main",
+      "parameters": [],
+      "body": {
+        "type": "OutputStatement",
+        "expression": {
+          "type": "FunctionCall",
+          "callee": {
+            "type": "Variable",
+            "name": "iterate"
+          },
+          "arguments": [
+            [
+              {
+                "type": "NumberLiteral",
+                "value": 6
+              }
+            ]
+          ]
+        }
+      },
+      "returnExpression": {
+        "type": "NumberLiteral",
+        "value": 0
+      }
+    }
+  ]
+}

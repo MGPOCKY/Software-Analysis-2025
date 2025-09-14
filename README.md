@@ -14,4 +14,4 @@
 ## Execution
 
 - One-line
-  - `git clone git@github.com:MGPOCKY/Software-Analysis-2025.git && cd 2-week && npm install && npm run all`
+  - `git clone git@github.com:MGPOCKY/Software-Analysis-2025.git && cd n-week && npm install && npm run all`
