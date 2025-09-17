@@ -8,6 +8,7 @@ import {
   DereferenceType,
   EqualType,
   Expression,
+  FunctionDeclaration,
   FunctionDeclarationType,
   IfElseType,
   IfType,
@@ -22,6 +23,8 @@ import {
   WhileType,
 } from "./types";
 import * as fs from "fs";
+
+const constraints: TypeConstraint[] = [];
 
 // 색상 출력을 위한 ANSI 코드
 const colors = {
@@ -99,31 +102,58 @@ async function processTypeCheck() {
   colorLog("cyan", "\n✨ Type Checking 처리 완료!");
 }
 
-// AST를 순회하면서 Type Constraint 수집
-function collectTypeConstraints(ast: Program): TypeConstraint[] {
-  const constraints: TypeConstraint[] = [];
+// 함수 시작 시 Symbol Table 구축
+function buildSymbolTable(func: FunctionDeclaration) {
+  const symbolTable = new Map<string, Variable>();
 
-  const addExpressionConstraint = (expression: Expression) => {
-    switch (expression.type) {
-      case "NumberLiteral":
-        const numberConstraint: NumberType = {
+  // 매개변수 등록
+  for (const param of func.parameters) {
+    const paramVar: Variable = {
+      type: "Variable",
+      name: param,
+      // location 등 추가 정보
+    };
+    symbolTable.set(param, paramVar);
+  }
+
+  // 지역변수 등록
+  if (func.localVariables) {
+    for (const localVar of func.localVariables) {
+      const localVarNode: Variable = {
+        type: "Variable",
+        name: localVar,
+      };
+      symbolTable.set(localVar, localVarNode);
+    }
+  }
+
+  return symbolTable;
+}
+
+const addExpressionConstraint = (
+  expression: Expression,
+  symbolTable: Map<string, Variable>
+) => {
+  switch (expression.type) {
+    case "NumberLiteral":
+      const numberConstraint: NumberType = {
+        originAST: expression,
+        left: [{ expression: expression }],
+        right: [{ type: "int" }],
+      };
+      constraints.push(numberConstraint);
+      break;
+    case "BinaryExpression":
+      addExpressionConstraint(expression.left, symbolTable);
+      addExpressionConstraint(expression.right, symbolTable);
+      if (expression.operator === "==") {
+        const equalConstraint: EqualType = {
           originAST: expression,
-          left: [{ expression: expression }],
-          right: [{ type: "int" }],
+          left: [{ expression: expression.left }, { expression }],
+          right: [{ expression: expression.right }, { type: "int" }],
         };
-        constraints.push(numberConstraint);
-        break;
-      case "BinaryExpression":
-        addExpressionConstraint(expression.left);
-        addExpressionConstraint(expression.right);
-        if (expression.operator === "==") {
-          const equalConstraint: EqualType = {
-            originAST: expression,
-            left: [{ expression: expression.left }, { expression }],
-            right: [{ expression: expression.right }, { type: "int" }],
-          };
-          constraints.push(equalConstraint);
-        }
+        constraints.push(equalConstraint);
+      } else {
         const binaryConstraint: BinaryType = {
           originAST: expression,
           left: [
@@ -134,77 +164,81 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
           right: [{ type: "int" }, { type: "int" }, { type: "int" }],
         };
         constraints.push(binaryConstraint);
-        break;
-      case "InputExpression":
-        const inputConstraint: InputType = {
-          originAST: expression,
-          left: [{ expression: expression }],
-          right: [{ type: "int" }],
-        };
-        constraints.push(inputConstraint);
-        break;
-      case "AllocExpression":
-        addExpressionConstraint(expression.expression);
-        const allocConstraint: AllocType = {
-          originAST: expression,
-          left: [{ expression: expression }],
-          right: [
-            {
-              type: "pointer",
-              pointsTo: { expression: expression.expression },
+      }
+      break;
+    case "InputExpression":
+      const inputConstraint: InputType = {
+        originAST: expression,
+        left: [{ expression: expression }],
+        right: [{ type: "int" }],
+      };
+      constraints.push(inputConstraint);
+      break;
+    case "AllocExpression":
+      addExpressionConstraint(expression.expression, symbolTable);
+      const allocConstraint: AllocType = {
+        originAST: expression,
+        left: [{ expression: expression }],
+        right: [
+          {
+            type: "pointer",
+            pointsTo: { expression: expression.expression },
+          },
+        ],
+      };
+      constraints.push(allocConstraint);
+      break;
+    case "AddressExpression":
+      const addressConstraint: AddressType = {
+        originAST: expression,
+        left: [{ expression: expression }],
+        right: [
+          {
+            type: "pointer",
+            pointsTo: {
+              expression: symbolTable.get(expression.variable)!,
             },
-          ],
-        };
-        constraints.push(allocConstraint);
-        break;
-      case "AddressExpression":
-        const addressConstraint: AddressType = {
-          originAST: expression,
-          left: [{ expression: expression }],
-          right: [
-            {
-              type: "pointer",
-              pointsTo: {
-                expression: { type: "Variable", name: expression.variable },
+          },
+        ],
+      };
+      constraints.push(addressConstraint);
+      break;
+    case "DereferenceExpression":
+      addExpressionConstraint(expression.expression, symbolTable);
+      const dereferenceConstraint: DereferenceType = {
+        originAST: expression,
+        left: [{ expression: expression }],
+        right: [
+          {
+            type: "pointer",
+            pointsTo: {
+              expression: {
+                type: "DereferenceExpression",
+                expression: expression.expression,
               },
             },
-          ],
-        };
-        constraints.push(addressConstraint);
-        break;
-      case "DereferenceExpression":
-        addExpressionConstraint(expression.expression);
-        const dereferenceConstraint: DereferenceType = {
-          originAST: expression,
-          left: [{ expression: expression }],
-          right: [
-            {
-              type: "pointer",
-              pointsTo: {
-                expression: {
-                  type: "DereferenceExpression",
-                  expression: expression.expression,
-                },
-              },
-            },
-          ],
-        };
-        constraints.push(dereferenceConstraint);
-        break;
-      // To do: Null 새로운 타입으로 구현
-      case "NullLiteral":
-        const nullConstraint: NullType = {
-          originAST: expression,
-          left: [{ type: "pointer", pointsTo: { expression: expression } }],
-          right: [],
-        };
-        constraints.push(nullConstraint);
-        break;
-    }
-  };
+          },
+        ],
+      };
+      constraints.push(dereferenceConstraint);
+      break;
+    // To do: Null 새로운 타입으로 구현
+    case "NullLiteral":
+      const nullConstraint: NullType = {
+        originAST: expression,
+        left: [{ type: "pointer", pointsTo: { expression: expression } }],
+        right: [],
+      };
+      constraints.push(nullConstraint);
+      break;
+  }
+};
 
+// AST를 순회하면서 Type Constraint 수집
+function collectTypeConstraints(ast: Program): TypeConstraint[] {
   for (const func of ast.functions) {
     // FunctionDeclarationType
+    const symbolTable = buildSymbolTable(func);
     const functionConstraint: FunctionDeclarationType = {
       originAST: func,
       left: [{ expression: { type: "Variable", name: func.name } }],
@@ -212,7 +246,7 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
         {
           type: "function",
           parameters: func.parameters.map((param) => ({
-            expression: { type: "Variable", name: param },
+            expression: symbolTable.get(param)!,
           })) as [{ expression: Variable }],
           returnType: { expression: func.returnExpression },
         },
@@ -223,14 +257,16 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
       // StatementType
       switch (stmt.type) {
         case "AssignmentStatement":
+          addExpressionConstraint(stmt.expression, symbolTable);
           const assignmentConstraint: AssignmentType = {
             originAST: stmt,
-            left: [{ expression: { type: "Variable", name: stmt.variable } }],
+            left: [{ expression: symbolTable.get(stmt.variable)! }],
             right: [{ expression: stmt.expression }],
           };
           constraints.push(assignmentConstraint);
           break;
         case "OutputStatement":
+          addExpressionConstraint(stmt.expression, symbolTable);
           const outputConstraint: OutputType = {
             originAST: stmt,
             left: [{ expression: stmt.expression }],
@@ -240,6 +276,7 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
           break;
         case "IfStatement":
           if (stmt.elseStatement) {
+            addExpressionConstraint(stmt.condition, symbolTable);
             const ifElseConstraint: IfElseType = {
               originAST: stmt,
               left: [{ expression: stmt.condition }],
@@ -247,6 +284,7 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
             };
             constraints.push(ifElseConstraint);
           } else {
+            addExpressionConstraint(stmt.condition, symbolTable);
             const ifConstraint: IfType = {
               originAST: stmt,
               left: [{ expression: stmt.condition }],
@@ -256,6 +294,7 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
           }
           break;
         case "WhileStatement":
+          addExpressionConstraint(stmt.condition, symbolTable);
           const whileConstraint: WhileType = {
             originAST: stmt,
             left: [{ expression: stmt.condition }],
@@ -264,6 +303,8 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
           constraints.push(whileConstraint);
           break;
         case "PointerAssignmentStatement":
+          addExpressionConstraint(stmt.pointer, symbolTable);
+          addExpressionConstraint(stmt.value, symbolTable);
           const pointerAssignmentConstraint: PointerAssignmentType = {
             originAST: stmt,
             left: [{ expression: stmt.pointer }],
