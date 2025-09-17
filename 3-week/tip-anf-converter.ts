@@ -4,7 +4,6 @@ import {
   FunctionDeclaration,
   Statement,
   Expression,
-  SequenceStatement,
   IfStatement,
   WhileStatement,
   BinaryExpression,
@@ -129,7 +128,7 @@ class TIPANFConverter {
     const entryNode = cfg.addNode(`Entry: ${func.name}`, "entry");
 
     // 함수 본문을 ANF로 변환
-    const { entryId, exitIds, resultVar } = this.convertStatementToANF(
+    const { entryId, exitIds, resultVar } = this.convertStatementsToANF(
       cfg,
       func.body
     );
@@ -228,6 +227,56 @@ class TIPANFConverter {
           exitIds: [outputNode.id],
         };
 
+      case "PropertyAssignmentStatement":
+        const { nodes: objNodes, resultVar: objResult } =
+          this.convertExpressionToANF(cfg, stmt.object);
+        const { nodes: propValueNodes, resultVar: propValueResult } =
+          this.convertExpressionToANF(cfg, stmt.value);
+
+        // 객체 표현식 노드들 연결
+        let objCurrentIds = objNodes.length > 0 ? [objNodes[0].id] : [];
+        for (let i = 1; i < objNodes.length; i++) {
+          for (const id of objCurrentIds) {
+            cfg.addEdge(id, objNodes[i].id);
+          }
+          objCurrentIds = [objNodes[i].id];
+        }
+
+        // 값 표현식 노드들 연결
+        let valueCurrentIds =
+          propValueNodes.length > 0 ? [propValueNodes[0].id] : [];
+        for (let i = 1; i < propValueNodes.length; i++) {
+          for (const id of valueCurrentIds) {
+            cfg.addEdge(id, propValueNodes[i].id);
+          }
+          valueCurrentIds = [propValueNodes[i].id];
+        }
+
+        // 속성 할당 노드
+        const objPropAssignNode = cfg.addNode(
+          `(*${objResult}).${stmt.property} = ${propValueResult}`,
+          "assignment"
+        );
+
+        // 객체 표현식에서 속성 할당으로 연결
+        if (objNodes.length > 0) {
+          for (const id of objCurrentIds) {
+            cfg.addEdge(id, objPropAssignNode.id);
+          }
+        }
+
+        // 값 표현식에서 속성 할당으로 연결
+        if (propValueNodes.length > 0) {
+          for (const id of valueCurrentIds) {
+            cfg.addEdge(id, objPropAssignNode.id);
+          }
+        }
+
+        return {
+          entryId: objNodes.length > 0 ? objNodes[0].id : objPropAssignNode.id,
+          exitIds: [objPropAssignNode.id],
+        };
+
       case "DirectPropertyAssignmentStatement":
         const { nodes: propNodes, resultVar: propResult } =
           this.convertExpressionToANF(cfg, stmt.value);
@@ -255,9 +304,6 @@ class TIPANFConverter {
           entryId: propNodes.length > 0 ? propNodes[0].id : propAssignNode.id,
           exitIds: [propAssignNode.id],
         };
-
-      case "SequenceStatement":
-        return this.convertSequenceToANF(cfg, stmt);
 
       case "IfStatement":
         return this.convertIfToANF(cfg, stmt);
@@ -438,11 +484,12 @@ class TIPANFConverter {
     }
   }
 
-  convertSequenceToANF(
+  // Statement[] 배열을 ANF로 변환하는 유틸리티 메서드
+  convertStatementsToANF(
     cfg: ANormalFormCFG,
-    stmt: SequenceStatement
+    statements: Statement[]
   ): { entryId: number; exitIds: number[]; resultVar?: string } {
-    if (stmt.statements.length === 0) {
+    if (statements.length === 0) {
       const emptyNode = cfg.addNode("(empty)", "assignment");
       return { entryId: emptyNode.id, exitIds: [emptyNode.id] };
     }
@@ -451,12 +498,12 @@ class TIPANFConverter {
     let entryId: number | undefined;
     let lastResultVar: string | undefined;
 
-    for (let i = 0; i < stmt.statements.length; i++) {
+    for (let i = 0; i < statements.length; i++) {
       const {
         entryId: stmtEntry,
         exitIds: stmtExits,
         resultVar,
-      } = this.convertStatementToANF(cfg, stmt.statements[i]);
+      } = this.convertStatementToANF(cfg, statements[i]);
 
       if (i === 0) {
         entryId = stmtEntry;
@@ -513,42 +560,19 @@ class TIPANFConverter {
 
     // Then 분기
     const { entryId: thenEntry, exitIds: thenExits } =
-      this.convertStatementToANF(cfg, stmt.thenStatement);
+      this.convertStatementsToANF(cfg, stmt.thenStatement);
     cfg.addEdge(conditionNode.id, thenEntry, "true");
 
     let allExitIds = [...thenExits];
 
     // Else 분기 (선택적)
-    if (stmt.elseStatement) {
-      // elseStatement가 배열인 경우 처리
-      let elseStmt: Statement | undefined = stmt.elseStatement;
-      if (Array.isArray(elseStmt)) {
-        if (elseStmt.length === 1) {
-          elseStmt = elseStmt[0];
-        } else if (elseStmt.length > 1) {
-          elseStmt = {
-            type: "SequenceStatement",
-            statements: elseStmt,
-          } as any;
-        } else {
-          elseStmt = undefined;
-        }
-      }
-
-      if (elseStmt) {
-        const { entryId: elseEntry, exitIds: elseExits } =
-          this.convertStatementToANF(cfg, elseStmt);
-        cfg.addEdge(conditionNode.id, elseEntry, "false");
-        allExitIds.push(...elseExits);
-      } else {
-        // else가 비어있으면 조건이 false일 때 바로 다음으로
-        const falseNode = cfg.addNode("(skip)", "assignment");
-        cfg.addEdge(conditionNode.id, falseNode.id, "false");
-        allExitIds.push(falseNode.id);
-      }
+    if (stmt.elseStatement && stmt.elseStatement.length > 0) {
+      const { entryId: elseEntry, exitIds: elseExits } =
+        this.convertStatementsToANF(cfg, stmt.elseStatement);
+      cfg.addEdge(conditionNode.id, elseEntry, "false");
+      allExitIds.push(...elseExits);
     } else {
-      // else가 없으면 조건이 false일 때 바로 다음으로
-      // false 라벨을 명시적으로 표시하기 위해 더미 노드 생성
+      // else 분기가 없거나 비어있으면 조건이 false일 때 바로 다음으로
       const falseNode = cfg.addNode("(skip)", "assignment");
       cfg.addEdge(conditionNode.id, falseNode.id, "false");
       allExitIds.push(falseNode.id);
@@ -594,7 +618,7 @@ class TIPANFConverter {
 
     // 루프 본문
     const { entryId: bodyEntry, exitIds: bodyExits } =
-      this.convertStatementToANF(cfg, stmt.body);
+      this.convertStatementsToANF(cfg, stmt.body);
 
     // 루프 종료 노드 (false 경로를 명시적으로 표시)
     const exitLoopNode = cfg.addNode("exit loop", "assignment");

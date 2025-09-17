@@ -8,7 +8,6 @@ import {
   Expression,
   AssignmentStatement,
   OutputStatement,
-  SequenceStatement,
   IfStatement,
   WhileStatement,
   PointerAssignmentStatement,
@@ -75,25 +74,14 @@ export class TIPParser {
         const paramList = params.numChildren > 0 ? params.toAST() : [];
         const localVars = varDecl.numChildren > 0 ? varDecl.toAST() : undefined;
         const stmtList = statements.toAST();
-        const bodyStmt =
-          stmtList.length > 0
-            ? stmtList.length === 1
-              ? stmtList[0]
-              : ({
-                  type: "SequenceStatement",
-                  statements: stmtList,
-                } as SequenceStatement)
-            : ({
-                type: "SequenceStatement",
-                statements: [],
-              } as SequenceStatement);
+        const bodyStmts = stmtList;
 
         return {
           type: "FunctionDeclaration",
           name: name.sourceString,
           parameters: paramList,
           localVariables: localVars,
-          body: bodyStmt,
+          body: bodyStmts,
           returnExpression: returnExpr.toAST(),
         } as FunctionDeclaration;
       },
@@ -158,20 +146,7 @@ export class TIPParser {
       },
 
       Block(_lbrace, statements, _rbrace) {
-        const stmts = statements.toAST();
-        if (stmts.length === 0) {
-          return {
-            type: "SequenceStatement",
-            statements: [],
-          } as SequenceStatement;
-        } else if (stmts.length === 1) {
-          return stmts[0];
-        } else {
-          return {
-            type: "SequenceStatement",
-            statements: stmts,
-          } as SequenceStatement;
-        }
+        return statements.toAST();
       },
 
       BlockStatement(stmt) {

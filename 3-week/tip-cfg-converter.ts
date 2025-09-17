@@ -4,7 +4,6 @@ import {
   FunctionDeclaration,
   Statement,
   Expression,
-  SequenceStatement,
   IfStatement,
   WhileStatement,
 } from "./types";
@@ -108,7 +107,7 @@ class TIPCFGConverter {
     const entryNode = cfg.addNode(`Entry: ${func.name}`, "entry");
 
     // 함수 본문 변환
-    const { entryId, exitIds } = this.convertStatement(cfg, func.body);
+    const { entryId, exitIds } = this.convertStatements(cfg, func.body);
 
     // Entry에서 함수 본문으로 연결
     cfg.addEdge(entryNode.id, entryId);
@@ -185,9 +184,6 @@ class TIPCFGConverter {
           exitIds: [objPropAssignNode.id],
         };
 
-      case "SequenceStatement":
-        return this.convertSequence(cfg, stmt);
-
       case "IfStatement":
         return this.convertIf(cfg, stmt);
 
@@ -212,11 +208,12 @@ class TIPCFGConverter {
     }
   }
 
-  convertSequence(
+  // Statement[] 배열을 처리하는 유틸리티 메서드
+  convertStatements(
     cfg: ControlFlowGraph,
-    stmt: SequenceStatement
+    statements: Statement[]
   ): { entryId: number; exitIds: number[] } {
-    if (stmt.statements.length === 0) {
+    if (statements.length === 0) {
       const emptyNode = cfg.addNode("(empty)", "statement");
       return { entryId: emptyNode.id, exitIds: [emptyNode.id] };
     }
@@ -224,10 +221,10 @@ class TIPCFGConverter {
     let currentExitIds: number[] = [];
     let entryId: number | undefined;
 
-    for (let i = 0; i < stmt.statements.length; i++) {
+    for (let i = 0; i < statements.length; i++) {
       const { entryId: stmtEntry, exitIds: stmtExits } = this.convertStatement(
         cfg,
-        stmt.statements[i]
+        statements[i]
       );
 
       if (i === 0) {
@@ -258,7 +255,7 @@ class TIPCFGConverter {
     );
 
     // Then 분기
-    const { entryId: thenEntry, exitIds: thenExits } = this.convertStatement(
+    const { entryId: thenEntry, exitIds: thenExits } = this.convertStatements(
       cfg,
       stmt.thenStatement
     );
@@ -267,36 +264,15 @@ class TIPCFGConverter {
     let allExitIds = [...thenExits];
 
     // Else 분기 (선택적)
-    if (stmt.elseStatement) {
-      // elseStatement가 배열인 경우 처리
-      let elseStmt: Statement | undefined = stmt.elseStatement;
-      if (Array.isArray(elseStmt)) {
-        if (elseStmt.length === 1) {
-          elseStmt = elseStmt[0];
-        } else if (elseStmt.length > 1) {
-          elseStmt = {
-            type: "SequenceStatement",
-            statements: elseStmt,
-          } as any;
-        } else {
-          elseStmt = undefined;
-        }
-      }
-
-      if (elseStmt) {
-        const { entryId: elseEntry, exitIds: elseExits } =
-          this.convertStatement(cfg, elseStmt);
-        cfg.addEdge(conditionNode.id, elseEntry, "false");
-        allExitIds.push(...elseExits);
-      } else {
-        // else가 비어있으면 조건이 false일 때 바로 다음으로
-        const falseNode = cfg.addNode("(skip)", "statement");
-        cfg.addEdge(conditionNode.id, falseNode.id, "false");
-        allExitIds.push(falseNode.id);
-      }
+    if (stmt.elseStatement && stmt.elseStatement.length > 0) {
+      const { entryId: elseEntry, exitIds: elseExits } = this.convertStatements(
+        cfg,
+        stmt.elseStatement
+      );
+      cfg.addEdge(conditionNode.id, elseEntry, "false");
+      allExitIds.push(...elseExits);
     } else {
-      // else가 없으면 조건이 false일 때 바로 다음으로
-      // false 라벨을 명시적으로 표시하기 위해 더미 노드 생성
+      // else 분기가 없거나 비어있으면 조건이 false일 때 바로 다음으로
       const falseNode = cfg.addNode("(skip)", "statement");
       cfg.addEdge(conditionNode.id, falseNode.id, "false");
       allExitIds.push(falseNode.id);
@@ -318,7 +294,7 @@ class TIPCFGConverter {
     );
 
     // 루프 본문
-    const { entryId: bodyEntry, exitIds: bodyExits } = this.convertStatement(
+    const { entryId: bodyEntry, exitIds: bodyExits } = this.convertStatements(
       cfg,
       stmt.body
     );
