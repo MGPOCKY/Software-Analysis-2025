@@ -1,0 +1,6 @@
+main() {
+  var rect, area;
+  rect = {width: 100, height: 50};
+  area = rect.width * rect.height;
+  return area;
+}

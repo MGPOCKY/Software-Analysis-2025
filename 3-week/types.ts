@@ -214,13 +214,25 @@ export interface TypeVariable {
   name: string; // α, β, γ, ...
 }
 
+// Record Type { x1 : e1, ..., xn : en }
+export interface RecordType {
+  type: "record";
+  fields: RecordField[]; // 필드들
+}
+
+export interface RecordField {
+  name: string; // 필드 이름
+  fieldType: Type; // 필드 타입
+}
+
 export type Type =
   | IntType
   | PointerType
   | FunctionType
   | CustomType
   | RecursiveType
-  | TypeVariable;
+  | TypeVariable
+  | RecordType;
 
 // ConcreteType: Unification에서 사용되는 구체적인 타입들
 export interface ConcreteIntType {
@@ -249,12 +261,23 @@ export interface ConcreteRecursiveType {
   body: ConcreteType; // 재귀 타입의 본체
 }
 
+export interface ConcreteRecordType {
+  type: "record";
+  fields: ConcreteRecordField[]; // 필드들
+}
+
+export interface ConcreteRecordField {
+  name: string; // 필드 이름
+  fieldType: ConcreteType; // 필드 타입
+}
+
 export type ConcreteType =
   | ConcreteIntType
   | ConcretePointerType
   | ConcreteFunctionType
   | ConcreteTypeVariable
-  | ConcreteRecursiveType;
+  | ConcreteRecursiveType
+  | ConcreteRecordType;
 
 // Type Variable 이름 생성기
 export class TypeVariableGenerator {

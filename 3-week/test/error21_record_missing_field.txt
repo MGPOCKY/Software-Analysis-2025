@@ -1,0 +1,5 @@
+main() {
+  var point;
+  point = {x: 10, y: 20};
+  return point.z;  // 존재하지 않는 필드 접근
+}

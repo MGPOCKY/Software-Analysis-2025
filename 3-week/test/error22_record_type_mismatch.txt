@@ -1,0 +1,6 @@
+main() {
+  var num, point;
+  num = 42;
+  point = {x: 10, y: 20};
+  return num.x;  // int 타입에 필드 접근 시도
+}

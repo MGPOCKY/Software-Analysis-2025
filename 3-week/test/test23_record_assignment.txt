@@ -1,0 +1,6 @@
+main() {
+  var p1, p2;
+  p1 = {x: 5, y: 10};
+  p2 = p1;
+  return p2.x;
+}

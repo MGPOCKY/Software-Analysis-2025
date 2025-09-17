@@ -5,3 +5,7 @@ node_modules/
 # Output directories
 */output/
 output/
+
+# dist directory
+*/dist/
+dist/

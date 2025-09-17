@@ -1,0 +1,5 @@
+main() {
+  var point;
+  point = {x: 10, y: 20};
+  return point.x + point.y;
+}

@@ -1,0 +1,6 @@
+main() {
+  var ptr, record;
+  record = {x: 10, y: 20};
+  ptr = &record;
+  return ptr.x;
+}
