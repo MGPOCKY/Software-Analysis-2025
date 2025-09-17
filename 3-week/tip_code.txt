@@ -1,6 +1,5 @@
-main () {
-  var m, k;
-  m = n;
-  m = k;
-  return 0;
+main() {
+  var x;
+  x = 42;
+  return x;
 }

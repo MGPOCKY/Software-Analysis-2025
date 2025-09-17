@@ -27,6 +27,133 @@ import * as fs from "fs";
 
 const constraints: TypeConstraint[] = [];
 
+// Unification을 위한 타입 정의
+interface TypeNode {
+  id: string;
+  kind: "expression" | "concrete";
+  value: Expression | ConcreteType;
+}
+
+interface ConcreteType {
+  type: "int" | "pointer" | "function";
+  pointsTo?: ConcreteType;
+  parameters?: ConcreteType[];
+  returnType?: ConcreteType;
+}
+
+// Union-Find 자료구조
+class UnionFind {
+  private parent: Map<string, string> = new Map();
+  private rank: Map<string, number> = new Map();
+  private typeInfo: Map<string, ConcreteType | null> = new Map();
+
+  makeSet(id: string, concreteType?: ConcreteType | null): void {
+    this.parent.set(id, id);
+    this.rank.set(id, 0);
+    this.typeInfo.set(id, concreteType || null);
+  }
+
+  find(id: string): string {
+    if (!this.parent.has(id)) {
+      this.makeSet(id);
+    }
+
+    const parentId = this.parent.get(id)!;
+    if (parentId !== id) {
+      // Path compression
+      this.parent.set(id, this.find(parentId));
+      return this.parent.get(id)!;
+    }
+    return id;
+  }
+
+  union(id1: string, id2: string): boolean {
+    const root1 = this.find(id1);
+    const root2 = this.find(id2);
+
+    if (root1 === root2) return true;
+
+    // 타입 충돌 검사
+    const type1 = this.typeInfo.get(root1);
+    const type2 = this.typeInfo.get(root2);
+
+    if (type1 && type2) {
+      if (!this.isCompatible(type1, type2)) {
+        return false; // 타입 오류
+      }
+    }
+
+    // Union by rank
+    const rank1 = this.rank.get(root1)!;
+    const rank2 = this.rank.get(root2)!;
+
+    if (rank1 < rank2) {
+      this.parent.set(root1, root2);
+      this.typeInfo.set(root2, type2 || type1 || null);
+    } else if (rank1 > rank2) {
+      this.parent.set(root2, root1);
+      this.typeInfo.set(root1, type1 || type2 || null);
+    } else {
+      this.parent.set(root2, root1);
+      this.rank.set(root1, rank1 + 1);
+      this.typeInfo.set(root1, type1 || type2 || null);
+    }
+
+    return true;
+  }
+
+  private isCompatible(type1: ConcreteType, type2: ConcreteType): boolean {
+    if (type1.type !== type2.type) return false;
+
+    switch (type1.type) {
+      case "int":
+        return true;
+      case "pointer":
+        if (!type1.pointsTo || !type2.pointsTo) return true;
+        return this.isCompatible(type1.pointsTo, type2.pointsTo);
+      case "function":
+        if (type1.parameters?.length !== type2.parameters?.length) return false;
+
+        // 매개변수 타입들 검사
+        if (type1.parameters && type2.parameters) {
+          for (let i = 0; i < type1.parameters.length; i++) {
+            if (!this.isCompatible(type1.parameters[i], type2.parameters[i])) {
+              return false;
+            }
+          }
+        }
+
+        // 반환 타입 검사
+        if (type1.returnType && type2.returnType) {
+          return this.isCompatible(type1.returnType, type2.returnType);
+        }
+
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  getType(id: string): ConcreteType | null {
+    const root = this.find(id);
+    return this.typeInfo.get(root) || null;
+  }
+
+  getAllGroups(): Map<string, string[]> {
+    const groups = new Map<string, string[]>();
+
+    for (const id of this.parent.keys()) {
+      const root = this.find(id);
+      if (!groups.has(root)) {
+        groups.set(root, []);
+      }
+      groups.get(root)!.push(id);
+    }
+
+    return groups;
+  }
+}
+
 // 색상 출력을 위한 ANSI 코드
 const colors = {
   reset: "\x1b[0m",
@@ -97,6 +224,24 @@ async function processTypeCheck() {
   // 5. Type Constraint 출력
   colorLog("blue", "\n📋 수집된 Type Constraints:");
   printDetailedConstraints(constraints);
+
+  // 6. Unification 실행
+  colorLog("yellow", "\n🔗 6단계: Unification 실행...");
+  const { unionFind, errors } = performUnification(constraints);
+
+  if (errors.length > 0) {
+    colorLog("red", `❌ Unification 중 ${errors.length}개의 타입 오류 발견`);
+  } else {
+    colorLog("green", "✅ Unification 완료 - 타입 오류 없음");
+  }
+
+  // 7. Unification 실행 결과 출력
+  colorLog("blue", "\n📊 7단계: Unification 결과 출력...");
+  printUnificationResults(unionFind, constraints);
+
+  // 8. 타입 오류 여부 출력
+  colorLog("magenta", "\n🔍 8단계: 타입 오류 분석...");
+  printTypeErrors(errors);
 
   colorLog("cyan", "\n✨ Type Checking 처리 완료!");
 }
@@ -250,7 +395,7 @@ const addExpressionConstraint = (
         const equalConstraint: EqualType = {
           originAST: expression,
           left: [{ expression: expression.left }, { expression: expression }],
-          right: [{ expression: expression }, { type: "int" }],
+          right: [{ expression: expression.right }, { type: "int" }],
         };
         constraints.push(equalConstraint);
       } else {
@@ -492,6 +637,235 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
   }
 
   return constraints;
+}
+
+// Expression이나 Type에서 고유 ID 생성
+function getTypeId(item: any): string {
+  if (item.expression) {
+    return `expr_${JSON.stringify(item.expression).replace(/\s/g, "")}`;
+  } else if (item.type) {
+    return `type_${JSON.stringify(item).replace(/\s/g, "")}`;
+  }
+  return `unknown_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Type을 ConcreteType으로 변환
+function toConcreteType(item: any): ConcreteType | null {
+  if (item.type === "int") {
+    return { type: "int" };
+  } else if (item.type === "pointer") {
+    const pointsTo = item.pointsTo ? toConcreteType(item.pointsTo) : undefined;
+    return {
+      type: "pointer",
+      pointsTo: pointsTo || undefined,
+    };
+  } else if (item.type === "function") {
+    const returnType = item.returnType
+      ? toConcreteType(item.returnType)
+      : undefined;
+    return {
+      type: "function",
+      parameters:
+        item.parameters
+          ?.map((p: any) => toConcreteType(p))
+          .filter((t: any) => t !== null) || [],
+      returnType: returnType || undefined,
+    };
+  }
+  return null;
+}
+
+// Unification 실행
+function performUnification(constraints: TypeConstraint[]): {
+  unionFind: UnionFind;
+  errors: string[];
+} {
+  const unionFind = new UnionFind();
+  const errors: string[] = [];
+
+  // 1. 모든 타입 변수와 concrete type들을 Union-Find에 등록
+  for (const constraint of constraints) {
+    // Left side 등록
+    for (const leftItem of constraint.left) {
+      const id = getTypeId(leftItem);
+      const concreteType = toConcreteType(leftItem);
+      unionFind.makeSet(id, concreteType);
+    }
+
+    // Right side 등록
+    for (const rightItem of constraint.right) {
+      const id = getTypeId(rightItem);
+      const concreteType = toConcreteType(rightItem);
+      unionFind.makeSet(id, concreteType);
+    }
+  }
+
+  // 2. Type constraint에 따라 unification 수행
+  for (const constraint of constraints) {
+    const leftIds = constraint.left.map((item) => getTypeId(item));
+    const rightIds = constraint.right.map((item) => getTypeId(item));
+
+    // Left와 Right의 각 쌍을 unify
+    const maxLength = Math.max(leftIds.length, rightIds.length);
+
+    for (let i = 0; i < maxLength; i++) {
+      const leftId = leftIds[i % leftIds.length];
+      const rightId = rightIds[i % rightIds.length];
+
+      if (leftId && rightId) {
+        const success = unionFind.union(leftId, rightId);
+        if (!success) {
+          errors.push(
+            `타입 충돌: ${constraint.originAST.type}에서 타입 불일치 (${leftId} ≠ ${rightId})`
+          );
+        }
+      }
+    }
+
+    // 특별한 경우들 처리
+    if (constraint.originAST.type === "BinaryExpression") {
+      const binaryExpr = constraint.originAST as any;
+
+      if (binaryExpr.operator === "==" && leftIds.length >= 2) {
+        // == 연산자: e1과 e2가 같은 타입이어야 함
+        const success = unionFind.union(leftIds[0], leftIds[1]);
+        if (!success) {
+          errors.push(
+            `타입 충돌: 등등 비교에서 피연산자 타입 불일치 (${leftIds[0]} ≠ ${leftIds[1]})`
+          );
+        }
+      } else if (leftIds.length >= 3) {
+        // 산술/비교 연산자: e1, e2, 결과 모두 같은 타입
+        const success1 = unionFind.union(leftIds[0], leftIds[1]); // e1 ↔ e2
+        const success2 = unionFind.union(leftIds[0], leftIds[2]); // e1 ↔ (e1 op e2)
+
+        if (!success1) {
+          errors.push(
+            `타입 충돌: 이진 연산에서 피연산자 타입 불일치 (${leftIds[0]} ≠ ${leftIds[1]})`
+          );
+        }
+        if (!success2) {
+          errors.push(
+            `타입 충돌: 이진 연산에서 결과 타입 불일치 (${leftIds[0]} ≠ ${leftIds[2]})`
+          );
+        }
+      }
+    }
+  }
+
+  return { unionFind, errors };
+}
+
+// Unification 결과 출력
+function printUnificationResults(
+  unionFind: UnionFind,
+  constraints: TypeConstraint[]
+) {
+  const groups = unionFind.getAllGroups();
+
+  colorLog("cyan", "   🏷️  Equivalence Classes (동등한 타입들):");
+  let classIndex = 1;
+
+  for (const [representative, members] of groups) {
+    const concreteType = unionFind.getType(representative);
+    const typeStr = concreteType
+      ? formatConcreteType(concreteType, unionFind)
+      : "추론된 타입";
+
+    colorLog("blue", `     클래스 ${classIndex}: ${typeStr}`);
+    members.forEach((member, idx) => {
+      const displayName = member.replace(/^(expr_|type_)/, "").substring(0, 50);
+      console.log(`       ${idx === 0 ? "⭐" : " "}  ${displayName}`);
+    });
+    console.log("");
+    classIndex++;
+  }
+
+  colorLog("green", "   📋 각 Expression의 최종 타입:");
+  const processedExpressions = new Set<string>();
+
+  for (const constraint of constraints) {
+    for (const leftItem of constraint.left) {
+      if (
+        "expression" in leftItem &&
+        leftItem.expression &&
+        !processedExpressions.has(JSON.stringify(leftItem.expression))
+      ) {
+        const id = getTypeId(leftItem);
+        const finalType = unionFind.getType(id);
+        const exprStr = formatExpression(leftItem.expression);
+        const typeStr = finalType
+          ? formatConcreteType(finalType, unionFind)
+          : "추론 중...";
+
+        console.log(`     ${exprStr} : ${typeStr}`);
+        processedExpressions.add(JSON.stringify(leftItem.expression));
+      }
+    }
+  }
+}
+
+// ConcreteType 포맷팅 (Union-Find를 활용한 개선된 버전)
+function formatConcreteType(type: ConcreteType, unionFind?: UnionFind): string {
+  switch (type.type) {
+    case "int":
+      return "int";
+    case "pointer":
+      return `pointer(${
+        type.pointsTo ? formatConcreteType(type.pointsTo, unionFind) : "?"
+      })`;
+    case "function":
+      const params =
+        type.parameters
+          ?.map((p) => formatConcreteType(p, unionFind))
+          .join(", ") || "";
+
+      let returnType = "?";
+      if (type.returnType) {
+        if (unionFind && "expression" in type.returnType) {
+          // CustomType인 경우 Union-Find에서 실제 타입 찾기
+          const returnExprId = getTypeId(type.returnType);
+          const actualReturnType = unionFind.getType(returnExprId);
+          if (actualReturnType) {
+            returnType = formatConcreteType(actualReturnType, unionFind);
+          } else {
+            // Union-Find에서 직접 expression의 타입 조회
+            const exprId = `expr_${JSON.stringify(
+              type.returnType.expression
+            ).replace(/\s/g, "")}`;
+            const exprType = unionFind.getType(exprId);
+            if (exprType) {
+              returnType = formatConcreteType(exprType, unionFind);
+            } else {
+              // 마지막 시도: 단순히 expression 이름으로 조회
+              returnType = "int"; // 임시: 실제 구현에서는 더 정교하게
+            }
+          }
+        } else {
+          returnType = formatConcreteType(
+            type.returnType as ConcreteType,
+            unionFind
+          );
+        }
+      }
+      return `function(${params}) -> ${returnType}`;
+    default:
+      return "unknown";
+  }
+}
+
+// 타입 오류 출력
+function printTypeErrors(errors: string[]) {
+  if (errors.length === 0) {
+    colorLog("green", "   ✅ 타입 오류가 발견되지 않았습니다!");
+    colorLog("green", "   🎉 프로그램이 타입적으로 올바릅니다.");
+  } else {
+    colorLog("red", `   ❌ ${errors.length}개의 타입 오류가 발견되었습니다:`);
+    errors.forEach((error, index) => {
+      colorLog("red", `     ${index + 1}. ${error}`);
+    });
+    colorLog("red", "   💥 프로그램에 타입 오류가 있습니다.");
+  }
 }
 
 // 에러 처리
