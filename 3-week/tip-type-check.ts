@@ -1,6 +1,26 @@
 import TIPParser from "./parser";
 import { TIPANFConverter } from "./tip-anf-converter";
-import { Program, TypeConstraint } from "./types";
+import {
+  AddressType,
+  AllocType,
+  AssignmentType,
+  BinaryType,
+  DereferenceType,
+  EqualType,
+  Expression,
+  FunctionDeclarationType,
+  IfElseType,
+  IfType,
+  InputType,
+  NullType,
+  NumberType,
+  OutputType,
+  PointerAssignmentType,
+  Program,
+  TypeConstraint,
+  Variable,
+  WhileType,
+} from "./types";
 import * as fs from "fs";
 
 // 색상 출력을 위한 ANSI 코드
@@ -83,31 +103,180 @@ async function processTypeCheck() {
 function collectTypeConstraints(ast: Program): TypeConstraint[] {
   const constraints: TypeConstraint[] = [];
 
-  // TODO: AST 순회하면서 Type Constraint 수집하는 코드
-  // 여기서 구현할 예정
+  const addExpressionConstraint = (expression: Expression) => {
+    switch (expression.type) {
+      case "NumberLiteral":
+        const numberConstraint: NumberType = {
+          originAST: expression,
+          left: [{ expression: expression }],
+          right: [{ type: "int" }],
+        };
+        constraints.push(numberConstraint);
+        break;
+      case "BinaryExpression":
+        addExpressionConstraint(expression.left);
+        addExpressionConstraint(expression.right);
+        if (expression.operator === "==") {
+          const equalConstraint: EqualType = {
+            originAST: expression,
+            left: [{ expression: expression.left }, { expression }],
+            right: [{ expression: expression.right }, { type: "int" }],
+          };
+          constraints.push(equalConstraint);
+        }
+        const binaryConstraint: BinaryType = {
+          originAST: expression,
+          left: [
+            { expression: expression.left },
+            { expression: expression.right },
+            { expression },
+          ],
+          right: [{ type: "int" }, { type: "int" }, { type: "int" }],
+        };
+        constraints.push(binaryConstraint);
+        break;
+      case "InputExpression":
+        const inputConstraint: InputType = {
+          originAST: expression,
+          left: [{ expression: expression }],
+          right: [{ type: "int" }],
+        };
+        constraints.push(inputConstraint);
+        break;
+      case "AllocExpression":
+        addExpressionConstraint(expression.expression);
+        const allocConstraint: AllocType = {
+          originAST: expression,
+          left: [{ expression: expression }],
+          right: [
+            {
+              type: "pointer",
+              pointsTo: { expression: expression.expression },
+            },
+          ],
+        };
+        constraints.push(allocConstraint);
+        break;
+      case "AddressExpression":
+        const addressConstraint: AddressType = {
+          originAST: expression,
+          left: [{ expression: expression }],
+          right: [
+            {
+              type: "pointer",
+              pointsTo: {
+                expression: { type: "Variable", name: expression.variable },
+              },
+            },
+          ],
+        };
+        constraints.push(addressConstraint);
+        break;
+      case "DereferenceExpression":
+        addExpressionConstraint(expression.expression);
+        const dereferenceConstraint: DereferenceType = {
+          originAST: expression,
+          left: [{ expression: expression }],
+          right: [
+            {
+              type: "pointer",
+              pointsTo: {
+                expression: {
+                  type: "DereferenceExpression",
+                  expression: expression.expression,
+                },
+              },
+            },
+          ],
+        };
+        constraints.push(dereferenceConstraint);
+        break;
+      // To do: Null 새로운 타입으로 구현
+      case "NullLiteral":
+        const nullConstraint: NullType = {
+          originAST: expression,
+          left: [{ type: "pointer", pointsTo: { expression: expression } }],
+          right: [],
+        };
+        constraints.push(nullConstraint);
+        break;
+    }
+  };
+
   for (const func of ast.functions) {
     // FunctionDeclarationType
+    const functionConstraint: FunctionDeclarationType = {
+      originAST: func,
+      left: [{ expression: { type: "Variable", name: func.name } }],
+      right: [
+        {
+          type: "function",
+          parameters: func.parameters.map((param) => ({
+            expression: { type: "Variable", name: param },
+          })) as [{ expression: Variable }],
+          returnType: { expression: func.returnExpression },
+        },
+      ],
+    };
+    constraints.push(functionConstraint);
     for (const stmt of func.body) {
       // StatementType
       switch (stmt.type) {
         case "AssignmentStatement":
-          // AssignmentStatementType
+          const assignmentConstraint: AssignmentType = {
+            originAST: stmt,
+            left: [{ expression: { type: "Variable", name: stmt.variable } }],
+            right: [{ expression: stmt.expression }],
+          };
+          constraints.push(assignmentConstraint);
           break;
         case "OutputStatement":
-          // OutputStatementType
+          const outputConstraint: OutputType = {
+            originAST: stmt,
+            left: [{ expression: stmt.expression }],
+            right: [{ type: "int" }],
+          };
+          constraints.push(outputConstraint);
+          break;
+        case "IfStatement":
+          if (stmt.elseStatement) {
+            const ifElseConstraint: IfElseType = {
+              originAST: stmt,
+              left: [{ expression: stmt.condition }],
+              right: [{ type: "int" }],
+            };
+            constraints.push(ifElseConstraint);
+          } else {
+            const ifConstraint: IfType = {
+              originAST: stmt,
+              left: [{ expression: stmt.condition }],
+              right: [{ type: "int" }],
+            };
+            constraints.push(ifConstraint);
+          }
+          break;
+        case "WhileStatement":
+          const whileConstraint: WhileType = {
+            originAST: stmt,
+            left: [{ expression: stmt.condition }],
+            right: [{ type: "int" }],
+          };
+          constraints.push(whileConstraint);
+          break;
+        case "PointerAssignmentStatement":
+          const pointerAssignmentConstraint: PointerAssignmentType = {
+            originAST: stmt,
+            left: [{ expression: stmt.pointer }],
+            right: [{ type: "pointer", pointsTo: { expression: stmt.value } }],
+          };
+          constraints.push(pointerAssignmentConstraint);
           break;
         // To do: 레코드 타입 추가 시 구현
         case "DirectPropertyAssignmentStatement":
           // DirectPropertyAssignmentStatementType
           break;
-        case "IfStatement":
-          // IfStatementType
-          break;
-        case "WhileStatement":
-          // WhileStatementType
-          break;
-        case "PointerAssignmentStatement":
-          // PointerAssignmentStatementType
+        case "PropertyAssignmentStatement":
+          // PropertyAssignmentStatementType
           break;
       }
     }

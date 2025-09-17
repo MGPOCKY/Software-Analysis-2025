@@ -5,6 +5,6 @@ foo (n) {
 
 main () {
   var n;
-  n = 3;
+  n = 3 + 3 + 3;
   return foo(n);
 }
