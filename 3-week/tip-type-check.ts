@@ -18,6 +18,7 @@ import {
   OutputType,
   PointerAssignmentType,
   Program,
+  Statement,
   TypeConstraint,
   Variable,
   WhileType,
@@ -248,8 +249,8 @@ const addExpressionConstraint = (
       if (expression.operator === "==") {
         const equalConstraint: EqualType = {
           originAST: expression,
-          left: [{ expression: expression.left }, { expression }],
-          right: [{ expression: expression.right }, { type: "int" }],
+          left: [{ expression: expression.left }, { expression: expression }],
+          right: [{ expression: expression }, { type: "int" }],
         };
         constraints.push(equalConstraint);
       } else {
@@ -330,17 +331,146 @@ const addExpressionConstraint = (
       };
       constraints.push(nullConstraint);
       break;
+    case "Variable":
+      // 변수 참조는 Symbol Table에서 찾아서 타입 제약 조건 생성
+      // 별도의 제약 조건은 생성하지 않고, 참조만 확인
+      break;
+    case "FunctionCall":
+      // 함수 호출의 인자들에 대한 제약 조건 수집
+      expression.arguments.forEach((arg) => {
+        addExpressionConstraint(arg, symbolTable);
+      });
+      addExpressionConstraint(expression.callee, symbolTable);
+      // 함수 호출 자체에 대한 타입 제약 조건은 별도로 구현 필요
+      break;
+    case "UnaryExpression":
+      addExpressionConstraint(expression.operand, symbolTable);
+      if (expression.operator === "*") {
+        // 역참조: operand는 포인터여야 함 - UnaryExpression을 위한 별도 제약 조건 필요
+        // 현재 DereferenceType은 DereferenceExpression 전용이므로 여기서는 주석 처리
+        // TODO: UnaryExpression용 타입 제약 조건 추가 필요
+      } else if (expression.operator === "&") {
+        // 주소 연산: UnaryExpression을 위한 별도 제약 조건 필요
+        // 현재 AddressType은 AddressExpression 전용이므로 여기서는 주석 처리
+        // TODO: UnaryExpression용 타입 제약 조건 추가 필요
+      }
+      break;
+    case "ObjectLiteral":
+      // 객체 리터럴의 속성들에 대한 제약 조건 수집
+      expression.properties.forEach((prop) => {
+        addExpressionConstraint(prop.value, symbolTable);
+      });
+      break;
+    case "PropertyAccess":
+      // 속성 접근의 객체에 대한 제약 조건 수집
+      addExpressionConstraint(expression.object, symbolTable);
+      break;
   }
 };
+
+// Statement들을 재귀적으로 처리하는 함수
+function processStatements(
+  statements: Statement[],
+  symbolTable: Map<string, Variable>
+) {
+  for (const stmt of statements) {
+    processStatement(stmt, symbolTable);
+  }
+}
+
+// 개별 Statement를 처리하는 함수
+function processStatement(stmt: Statement, symbolTable: Map<string, Variable>) {
+  switch (stmt.type) {
+    case "AssignmentStatement":
+      addExpressionConstraint(stmt.expression, symbolTable);
+      const assignmentConstraint: AssignmentType = {
+        originAST: stmt,
+        left: [
+          {
+            expression: symbolTable.get(stmt.variable) || {
+              type: "Variable",
+              name: stmt.variable,
+            },
+          },
+        ],
+        right: [{ expression: stmt.expression }],
+      };
+      constraints.push(assignmentConstraint);
+      break;
+    case "OutputStatement":
+      addExpressionConstraint(stmt.expression, symbolTable);
+      const outputConstraint: OutputType = {
+        originAST: stmt,
+        left: [{ expression: stmt.expression }],
+        right: [{ type: "int" }],
+      };
+      constraints.push(outputConstraint);
+      break;
+    case "IfStatement":
+      addExpressionConstraint(stmt.condition, symbolTable);
+      if (stmt.elseStatement) {
+        const ifElseConstraint: IfElseType = {
+          originAST: stmt,
+          left: [{ expression: stmt.condition }],
+          right: [{ type: "int" }],
+        };
+        constraints.push(ifElseConstraint);
+        // 재귀적으로 then과 else 블록 처리
+        processStatements(stmt.thenStatement, symbolTable);
+        processStatements(stmt.elseStatement, symbolTable);
+      } else {
+        const ifConstraint: IfType = {
+          originAST: stmt,
+          left: [{ expression: stmt.condition }],
+          right: [{ type: "int" }],
+        };
+        constraints.push(ifConstraint);
+        // 재귀적으로 then 블록 처리
+        processStatements(stmt.thenStatement, symbolTable);
+      }
+      break;
+    case "WhileStatement":
+      addExpressionConstraint(stmt.condition, symbolTable);
+      const whileConstraint: WhileType = {
+        originAST: stmt,
+        left: [{ expression: stmt.condition }],
+        right: [{ type: "int" }],
+      };
+      constraints.push(whileConstraint);
+      // 재귀적으로 while 바디 처리
+      processStatements(stmt.body, symbolTable);
+      break;
+    case "PointerAssignmentStatement":
+      addExpressionConstraint(stmt.pointer, symbolTable);
+      addExpressionConstraint(stmt.value, symbolTable);
+      const pointerAssignmentConstraint: PointerAssignmentType = {
+        originAST: stmt,
+        left: [{ expression: stmt.pointer }],
+        right: [{ type: "pointer", pointsTo: { expression: stmt.value } }],
+      };
+      constraints.push(pointerAssignmentConstraint);
+      break;
+    case "DirectPropertyAssignmentStatement":
+      addExpressionConstraint(stmt.value, symbolTable);
+      // DirectPropertyAssignmentStatementType 구현 필요
+      break;
+    case "PropertyAssignmentStatement":
+      addExpressionConstraint(stmt.object, symbolTable);
+      addExpressionConstraint(stmt.value, symbolTable);
+      // PropertyAssignmentStatementType 구현 필요
+      break;
+    case "ReturnStatement":
+      addExpressionConstraint(stmt.expression, symbolTable);
+      // Return statement 타입 제약 조건은 함수 차원에서 처리
+      break;
+  }
+}
 
 // AST를 순회하면서 Type Constraint 수집
 function collectTypeConstraints(ast: Program): TypeConstraint[] {
   for (const func of ast.functions) {
     // FunctionDeclarationType
     const symbolTable = buildSymbolTable(func);
-    func.parameters.forEach((param) => {
-      addExpressionConstraint(symbolTable.get(param)!, symbolTable);
-    });
     addExpressionConstraint(func.returnExpression, symbolTable);
     const functionConstraint: FunctionDeclarationType = {
       originAST: func,
@@ -356,74 +486,9 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
       ],
     };
     constraints.push(functionConstraint);
-    for (const stmt of func.body) {
-      // StatementType
-      switch (stmt.type) {
-        case "AssignmentStatement":
-          addExpressionConstraint(stmt.expression, symbolTable);
-          const assignmentConstraint: AssignmentType = {
-            originAST: stmt,
-            left: [{ expression: { type: "Variable", name: stmt.variable } }],
-            right: [{ expression: stmt.expression }],
-          };
-          constraints.push(assignmentConstraint);
-          break;
-        case "OutputStatement":
-          addExpressionConstraint(stmt.expression, symbolTable);
-          const outputConstraint: OutputType = {
-            originAST: stmt,
-            left: [{ expression: stmt.expression }],
-            right: [{ type: "int" }],
-          };
-          constraints.push(outputConstraint);
-          break;
-        case "IfStatement":
-          if (stmt.elseStatement) {
-            addExpressionConstraint(stmt.condition, symbolTable);
-            const ifElseConstraint: IfElseType = {
-              originAST: stmt,
-              left: [{ expression: stmt.condition }],
-              right: [{ type: "int" }],
-            };
-            constraints.push(ifElseConstraint);
-          } else {
-            addExpressionConstraint(stmt.condition, symbolTable);
-            const ifConstraint: IfType = {
-              originAST: stmt,
-              left: [{ expression: stmt.condition }],
-              right: [{ type: "int" }],
-            };
-            constraints.push(ifConstraint);
-          }
-          break;
-        case "WhileStatement":
-          addExpressionConstraint(stmt.condition, symbolTable);
-          const whileConstraint: WhileType = {
-            originAST: stmt,
-            left: [{ expression: stmt.condition }],
-            right: [{ type: "int" }],
-          };
-          constraints.push(whileConstraint);
-          break;
-        case "PointerAssignmentStatement":
-          addExpressionConstraint(stmt.pointer, symbolTable);
-          addExpressionConstraint(stmt.value, symbolTable);
-          const pointerAssignmentConstraint: PointerAssignmentType = {
-            originAST: stmt,
-            left: [{ expression: stmt.pointer }],
-            right: [{ type: "pointer", pointsTo: { expression: stmt.value } }],
-          };
-          constraints.push(pointerAssignmentConstraint);
-          break;
-        // To do: 레코드 타입 추가 시 구현
-        case "DirectPropertyAssignmentStatement":
-          // DirectPropertyAssignmentStatementType
-          break;
-        case "PropertyAssignmentStatement":
-          // PropertyAssignmentStatementType
-          break;
-      }
-    }
+
+    // 함수 바디의 Statement들을 재귀적으로 처리
+    processStatements(func.body, symbolTable);
   }
 
   return constraints;
