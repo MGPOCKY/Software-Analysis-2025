@@ -1,0 +1,6 @@
+main() {
+  var x, ptr;
+  x = 10;
+  ptr = &x;
+  return *ptr;
+}

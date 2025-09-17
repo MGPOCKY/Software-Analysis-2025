@@ -1,0 +1,9 @@
+add(x, y) {
+  return x + y;
+}
+
+main() {
+  var result;
+  result = add(10, 20);
+  return result;
+}

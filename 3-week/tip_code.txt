@@ -1,10 +1,6 @@
-foo (n) {
-  output n;
-  return n;
-}
-
 main () {
-  var n;
-  n = 3 + 3 + 3;
-  return foo(n);
+  var m, k;
+  m = n;
+  m = k;
+  return 0;
 }

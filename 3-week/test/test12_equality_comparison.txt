@@ -1,0 +1,11 @@
+main() {
+  var a, b, equal;
+  a = 10;
+  b = 10;
+  equal = a == b;
+  if (equal == 1) {
+    return 1;
+  } else {
+    return 0;
+  }
+}

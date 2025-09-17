@@ -1,0 +1,10 @@
+main() {
+  var x, result;
+  x = 15;
+  if (x > 10) {
+    result = 1;
+  } else {
+    result = 0;
+  }
+  return result;
+}

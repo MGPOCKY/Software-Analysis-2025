@@ -1,0 +1,15 @@
+swap(ptr1, ptr2) {
+  var temp;
+  temp = *ptr1;
+  *ptr1 = *ptr2;
+  *ptr2 = temp;
+  return 0;
+}
+
+main() {
+  var a, b, result;
+  a = 10;
+  b = 20;
+  result = swap(&a, &b);
+  return a + b;
+}

@@ -1,0 +1,16 @@
+compute(a, b, c) {
+  var temp1, temp2;
+  temp1 = a * b + c;
+  temp2 = temp1 / (a - b);
+  return temp2;
+}
+
+main() {
+  var x, y, z, result;
+  x = input;
+  y = x + 5;
+  z = y * 2;
+  result = compute(x, y, z);
+  output result;
+  return result;
+}

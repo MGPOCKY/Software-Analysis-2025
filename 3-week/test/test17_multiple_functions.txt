@@ -1,0 +1,19 @@
+square(x) {
+  return x * x;
+}
+
+cube(x) {
+  return x * square(x);
+}
+
+power_sum(a, b) {
+  return square(a) + cube(b);
+}
+
+main() {
+  var x, y, result;
+  x = 3;
+  y = 4;
+  result = power_sum(x, y);
+  return result;
+}

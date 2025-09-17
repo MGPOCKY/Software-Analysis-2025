@@ -1,0 +1,9 @@
+main() {
+  var x, y, ptr;
+  x = 5;
+  y = 0;
+  ptr = &x;
+  *ptr = 15;
+  y = *ptr;
+  return y;
+}

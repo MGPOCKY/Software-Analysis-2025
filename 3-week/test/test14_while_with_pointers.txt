@@ -1,0 +1,15 @@
+main() {
+  var arr, i, sum, ptr;
+  arr = alloc 10;
+  i = 0;
+  sum = 0;
+
+  while (i < 5) {
+    ptr = arr + i;
+    *ptr = i * 2;
+    sum = sum + *ptr;
+    i = i + 1;
+  }
+
+  return sum;
+}

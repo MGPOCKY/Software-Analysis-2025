@@ -1,0 +1,8 @@
+main() {
+  var ptr, value;
+  ptr = alloc 100;
+  *ptr = 42;
+  value = *ptr;
+  ptr = null;
+  return value;
+}

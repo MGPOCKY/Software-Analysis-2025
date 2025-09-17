@@ -95,11 +95,110 @@ async function processTypeCheck() {
 
   // 5. Type Constraint 출력
   colorLog("blue", "\n📋 수집된 Type Constraints:");
-  constraints.forEach((constraint, index) => {
-    colorLog("blue", `  ${index + 1}. ${constraint.originAST.type}`);
-  });
+  printDetailedConstraints(constraints);
 
   colorLog("cyan", "\n✨ Type Checking 처리 완료!");
+}
+
+// Type Constraint 상세 출력 함수
+function printDetailedConstraints(constraints: TypeConstraint[]) {
+  constraints.forEach((constraint, index) => {
+    colorLog(
+      "yellow",
+      `\n  ${index + 1}. ${constraint.originAST.type} 제약 조건:`
+    );
+
+    // Origin AST 정보
+    colorLog("magenta", `     원본 AST: ${constraint.originAST.type}`);
+
+    // Left side 출력
+    colorLog("cyan", "     Left side:");
+    constraint.left.forEach((leftItem, leftIndex) => {
+      if ("expression" in leftItem) {
+        console.log(
+          `       [${leftIndex}] Expression: ${formatExpression(
+            leftItem.expression
+          )}`
+        );
+      } else if ("type" in leftItem) {
+        console.log(`       [${leftIndex}] Type: ${formatType(leftItem)}`);
+      } else {
+        console.log(
+          `       [${leftIndex}] ${JSON.stringify(leftItem, null, 2)}`
+        );
+      }
+    });
+
+    // Right side 출력
+    colorLog("green", "     Right side:");
+    constraint.right.forEach((rightItem, rightIndex) => {
+      if ("expression" in rightItem) {
+        console.log(
+          `       [${rightIndex}] Expression: ${formatExpression(
+            rightItem.expression
+          )}`
+        );
+      } else if ("type" in rightItem) {
+        console.log(`       [${rightIndex}] Type: ${formatType(rightItem)}`);
+      } else {
+        console.log(
+          `       [${rightIndex}] ${JSON.stringify(rightItem, null, 2)}`
+        );
+      }
+    });
+  });
+}
+
+// Expression을 간결하게 포맷팅하는 함수
+function formatExpression(expr: any): string {
+  if (!expr) return "null";
+
+  switch (expr.type) {
+    case "NumberLiteral":
+      return `Number(${expr.value})`;
+    case "Variable":
+      return `Var(${expr.name})`;
+    case "BinaryExpression":
+      return `Binary(${formatExpression(expr.left)} ${
+        expr.operator
+      } ${formatExpression(expr.right)})`;
+    case "AssignmentStatement":
+      return `Assignment(${expr.variable} = ${formatExpression(
+        expr.expression
+      )})`;
+    case "InputExpression":
+      return "Input()";
+    case "AllocExpression":
+      return `Alloc(${formatExpression(expr.expression)})`;
+    case "AddressExpression":
+      return `Address(&${expr.variable})`;
+    case "DereferenceExpression":
+      return `Deref(*${formatExpression(expr.expression)})`;
+    case "NullLiteral":
+      return "null";
+    default:
+      return `${expr.type}(...)`;
+  }
+}
+
+// Type을 포맷팅하는 함수
+function formatType(type: any): string {
+  if (!type) return "unknown";
+
+  if (type.type === "int") {
+    return "int";
+  } else if (type.type === "pointer") {
+    return `pointer(${type.pointsTo ? formatType(type.pointsTo) : "?"})`;
+  } else if (type.type === "function") {
+    const params =
+      type.parameters?.map((p: any) => formatType(p)).join(", ") || "";
+    const returnType = type.returnType ? formatType(type.returnType) : "?";
+    return `function(${params}) -> ${returnType}`;
+  } else if (type.expression) {
+    return `CustomType(${formatExpression(type.expression)})`;
+  } else {
+    return JSON.stringify(type);
+  }
 }
 
 // 함수 시작 시 Symbol Table 구축
@@ -239,6 +338,10 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
   for (const func of ast.functions) {
     // FunctionDeclarationType
     const symbolTable = buildSymbolTable(func);
+    func.parameters.forEach((param) => {
+      addExpressionConstraint(symbolTable.get(param)!, symbolTable);
+    });
+    addExpressionConstraint(func.returnExpression, symbolTable);
     const functionConstraint: FunctionDeclarationType = {
       originAST: func,
       left: [{ expression: { type: "Variable", name: func.name } }],
@@ -260,7 +363,7 @@ function collectTypeConstraints(ast: Program): TypeConstraint[] {
           addExpressionConstraint(stmt.expression, symbolTable);
           const assignmentConstraint: AssignmentType = {
             originAST: stmt,
-            left: [{ expression: symbolTable.get(stmt.variable)! }],
+            left: [{ expression: { type: "Variable", name: stmt.variable } }],
             right: [{ expression: stmt.expression }],
           };
           constraints.push(assignmentConstraint);

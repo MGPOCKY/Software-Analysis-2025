@@ -1,0 +1,29 @@
+process_data(ptr, size) {
+  var i, sum, current;
+  i = 0;
+  sum = 0;
+
+  while (i < size) {
+    current = *(ptr + i);
+    if (current > 0) {
+      sum = sum + current;
+    }
+    i = i + 1;
+  }
+
+  return sum;
+}
+
+main() {
+  var data, result;
+  data = alloc 5;
+  *data = 10;
+  *(data + 1) = -5;
+  *(data + 2) = 15;
+  *(data + 3) = 0;
+  *(data + 4) = 25;
+
+  result = process_data(data, 5);
+  output result;
+  return result;
+}

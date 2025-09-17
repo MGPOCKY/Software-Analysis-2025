@@ -1,0 +1,7 @@
+main() {
+  var x, ptr1, ptr2;
+  x = 25;
+  ptr1 = &x;
+  ptr2 = &ptr1;
+  return **ptr2;
+}

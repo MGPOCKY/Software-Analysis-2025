@@ -1,0 +1,7 @@
+main() {
+  var input_val, doubled;
+  input_val = input;
+  doubled = input_val * 2;
+  output doubled;
+  return 0;
+}
