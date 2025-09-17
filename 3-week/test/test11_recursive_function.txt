@@ -1,11 +1,15 @@
 factorial(n) {
+  var result;
   if (n == 0) {
-    return 1;
+    result = 1;
   } else {
-    return n * factorial(n - 1);
+    result = n * factorial(n - 1);
   }
+  return result;
 }
 
 main() {
-  return factorial(5);
+  var result;
+  result = factorial(5);
+  return result;
 }

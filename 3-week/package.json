@@ -11,7 +11,8 @@
     "cfg": "ts-node cfg.ts",
     "normal": "ts-node normal.ts",
     "all": "ts-node parser.ts && ts-node cfg.ts && ts-node normal.ts",
-    "tip-all": "ts-node tip-all-in-one.ts"
+    "tip-all": "ts-node tip-all-in-one.ts",
+    "tip-type-check": "ts-node tip-type-check.ts"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",

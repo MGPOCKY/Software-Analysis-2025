@@ -1,14 +1,20 @@
 main() {
-  var arr, i, sum, ptr;
-  arr = alloc 10;
-  i = 0;
+  var counter, target, ptr, current_val, sum;
+
+  counter = 0;
+  target = 3;
   sum = 0;
 
-  while (i < 5) {
-    ptr = arr + i;
-    *ptr = i * 2;
-    sum = sum + *ptr;
-    i = i + 1;
+  ptr = &counter;
+
+  while (*ptr == counter) {
+    current_val = counter * 2;
+    sum = sum + current_val;
+    counter = counter + 1;
+
+    if (counter == target) {
+      *ptr = 999; // 루프 종료 조건
+    }
   }
 
   return sum;

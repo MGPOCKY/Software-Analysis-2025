@@ -1,29 +1,25 @@
-process_data(ptr, size) {
-  var i, sum, current;
-  i = 0;
-  sum = 0;
+main() {
+  var num1, num2, ptr, temp, sum, product, final_result;
 
-  while (i < size) {
-    current = *(ptr + i);
-    if (current > 0) {
-      sum = sum + current;
-    }
-    i = i + 1;
+  num1 = 5;
+  num2 = 3;
+  ptr = &num1;
+
+  // 포인터를 통한 값 변경
+  *ptr = 7;
+
+  // 혼합 연산: 포인터 역참조, 산술 연산, 비교 연산
+  temp = *ptr + num2;
+  sum = temp * 2;
+
+  // 조건문과 할당
+  if (sum > 15) {
+    product = sum * 2;
+  } else {
+    product = sum;
   }
 
-  return sum;
-}
-
-main() {
-  var data, result;
-  data = alloc 5;
-  *data = 10;
-  *(data + 1) = -5;
-  *(data + 2) = 15;
-  *(data + 3) = 0;
-  *(data + 4) = 25;
-
-  result = process_data(data, 5);
-  output result;
-  return result;
+  final_result = product;
+  output final_result;
+  return final_result;
 }

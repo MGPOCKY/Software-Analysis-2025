@@ -1,12 +1,8 @@
 // 타입 오류: 복합적인 타입 불일치
 process(ptr, size) {
-  var i, sum;
-  i = 0;
+  var sum;
   sum = ptr;  // 오류: sum에 pointer 할당
-  while (i < size) {
-    sum = sum + *(ptr + i);  // 오류: pointer + int
-    i = i + 1;
-  }
+  sum = sum + size;  // 오류: pointer + int
   return sum;
 }
 

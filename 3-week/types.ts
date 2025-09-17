@@ -201,7 +201,111 @@ export interface CustomType {
   expression: Expression;
 }
 
-export type Type = IntType | PointerType | FunctionType | CustomType;
+// Recursive Type (μα.τ)
+export interface RecursiveType {
+  type: "recursive";
+  variable: string; // α, β, γ, ...
+  body: Type;
+}
+
+// Type Variable (α, β, γ, ...)
+export interface TypeVariable {
+  type: "typevar";
+  name: string; // α, β, γ, ...
+}
+
+export type Type =
+  | IntType
+  | PointerType
+  | FunctionType
+  | CustomType
+  | RecursiveType
+  | TypeVariable;
+
+// ConcreteType: Unification에서 사용되는 구체적인 타입들
+export interface ConcreteIntType {
+  type: "int";
+}
+
+export interface ConcretePointerType {
+  type: "pointer";
+  pointsTo?: ConcreteType; // 포인터가 가리키는 타입
+}
+
+export interface ConcreteFunctionType {
+  type: "function";
+  parameters: ConcreteType[]; // 매개변수 타입들
+  returnType?: ConcreteType; // 반환 타입
+}
+
+export interface ConcreteTypeVariable {
+  type: "typevar";
+  name: string; // Type variable 이름 (α, β, γ, ...)
+}
+
+export interface ConcreteRecursiveType {
+  type: "recursive";
+  variable: string; // 재귀 변수 (α, β, γ, ...)
+  body: ConcreteType; // 재귀 타입의 본체
+}
+
+export type ConcreteType =
+  | ConcreteIntType
+  | ConcretePointerType
+  | ConcreteFunctionType
+  | ConcreteTypeVariable
+  | ConcreteRecursiveType;
+
+// Type Variable 이름 생성기
+export class TypeVariableGenerator {
+  private counter = 0;
+  private greekLetters = [
+    "α",
+    "β",
+    "γ",
+    "δ",
+    "ε",
+    "ζ",
+    "η",
+    "θ",
+    "ι",
+    "κ",
+    "λ",
+    "μ",
+    "ν",
+    "ξ",
+    "ο",
+    "π",
+    "ρ",
+    "σ",
+    "τ",
+    "υ",
+    "φ",
+    "χ",
+    "ψ",
+    "ω",
+  ];
+
+  generateNewTypeVariable(): string {
+    if (this.counter < this.greekLetters.length) {
+      return this.greekLetters[this.counter++];
+    } else {
+      // 그리스 문자가 모두 사용되면 숫자를 붙임
+      const baseIndex =
+        (this.counter - this.greekLetters.length) % this.greekLetters.length;
+      const suffix =
+        Math.floor(
+          (this.counter - this.greekLetters.length) / this.greekLetters.length
+        ) + 1;
+      this.counter++;
+      return `${this.greekLetters[baseIndex]}${suffix}`;
+    }
+  }
+
+  reset(): void {
+    this.counter = 0;
+  }
+}
 
 export interface TypeConstraint {
   originAST: ASTNode;

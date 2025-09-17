@@ -1,5 +1,13 @@
+// 타입 오류: 복잡한 표현식에서 타입 불일치
+calculate(x, y) {
+  return x * y + 10;
+}
+
 main() {
-  var x;
-  x = 42;
-  return x;
+  var a, b, ptr, result;
+  a = 5;
+  b = 10;
+  ptr = &a;
+  result = calculate(a, *ptr) + ptr;  // 오류: int + pointer
+  return result;
 }
