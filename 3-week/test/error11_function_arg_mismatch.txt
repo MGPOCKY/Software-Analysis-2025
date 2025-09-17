@@ -1,0 +1,11 @@
+// 타입 오류: 함수 인자 타입 불일치
+add(x, y) {
+  return x + y;
+}
+
+main() {
+  var ptr, result;
+  ptr = alloc 10;
+  result = add(5, ptr);  // 오류: 두 번째 인자가 pointer
+  return result;
+}

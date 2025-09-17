@@ -1,0 +1,7 @@
+// 타입 오류: null을 산술 연산에 사용
+main() {
+  var ptr, result;
+  ptr = null;
+  result = ptr + 10;  // 오류: null(pointer)를 산술 연산에 사용
+  return result;
+}

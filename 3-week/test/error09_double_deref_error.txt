@@ -1,0 +1,7 @@
+// 타입 오류: 잘못된 이중 역참조
+main() {
+  var x, ptr;
+  x = 10;
+  ptr = &x;
+  return **ptr;  // 오류: ptr은 int*이므로 **ptr은 불가능
+}

@@ -1,0 +1,8 @@
+// 타입 오류: int와 pointer 충돌
+main() {
+  var x, ptr;
+  x = 10;
+  ptr = alloc 5;
+  x = ptr;  // 오류: int 변수에 pointer 할당
+  return x;
+}

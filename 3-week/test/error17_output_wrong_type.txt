@@ -1,0 +1,8 @@
+// 타입 오류: output에 잘못된 타입 전달
+main() {
+  var ptr;
+  ptr = alloc 10;
+  *ptr = 42;
+  output ptr;  // 오류: output은 int만 가능, pointer 전달
+  return 0;
+}

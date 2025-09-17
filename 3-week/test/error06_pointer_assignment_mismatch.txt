@@ -1,0 +1,10 @@
+// 타입 오류: 잘못된 포인터 할당
+main() {
+  var x, y, ptr1, ptr2;
+  x = 10;
+  y = 20;
+  ptr1 = &x;
+  ptr2 = &y;
+  *ptr1 = ptr2;  // 오류: int 위치에 pointer 할당
+  return *ptr1;
+}

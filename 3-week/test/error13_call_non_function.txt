@@ -1,0 +1,7 @@
+// 타입 오류: 함수가 아닌 것을 호출
+main() {
+  var x, result;
+  x = 42;
+  result = x(10);  // 오류: x는 int이므로 호출 불가
+  return result;
+}

@@ -1,0 +1,12 @@
+// 타입 오류: 재귀 함수에서 타입 불일치
+factorial(n) {
+  if (n == 0) {
+    return &n;  // 오류: 포인터 반환하지만
+  } else {
+    return n * factorial(n - 1);  // 여기서는 int 반환
+  }
+}
+
+main() {
+  return factorial(5);
+}

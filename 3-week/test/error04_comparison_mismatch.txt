@@ -1,0 +1,8 @@
+// 타입 오류: 다른 타입들을 비교
+main() {
+  var x, ptr, result;
+  x = 10;
+  ptr = alloc 5;
+  result = x == ptr;  // 오류: int와 pointer 비교 불가
+  return result;
+}

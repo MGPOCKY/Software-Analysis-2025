@@ -1,0 +1,11 @@
+// 타입 오류: 함수를 값으로 사용
+helper(x) {
+  return x * 2;
+}
+
+main() {
+  var func, result;
+  func = helper;  // 함수를 변수에 할당
+  result = func + 10;  // 오류: 함수 + int
+  return result;
+}

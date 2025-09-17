@@ -1,0 +1,7 @@
+// 타입 오류: alloc에 non-int 전달
+main() {
+  var ptr1, ptr2;
+  ptr1 = alloc 10;
+  ptr2 = alloc ptr1;  // 오류: alloc의 인자는 int여야 함
+  return *ptr2;
+}

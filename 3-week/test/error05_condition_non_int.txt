@@ -1,0 +1,11 @@
+// 타입 오류: 조건문에 non-int 사용
+main() {
+  var ptr, result;
+  ptr = alloc 10;
+  if (ptr) {  // 오류: 조건문에는 int만 사용 가능
+    result = 1;
+  } else {
+    result = 0;
+  }
+  return result;
+}

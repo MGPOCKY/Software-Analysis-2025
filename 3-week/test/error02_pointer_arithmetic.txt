@@ -1,0 +1,7 @@
+// 타입 오류: pointer를 산술 연산에 사용
+main() {
+  var ptr, result;
+  ptr = alloc 10;
+  result = ptr + 5;  // 오류: pointer를 숫자와 더할 수 없음
+  return result;
+}

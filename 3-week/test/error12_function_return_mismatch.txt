@@ -1,0 +1,12 @@
+// 타입 오류: 함수 반환 타입 불일치
+getPointer() {
+  var x;
+  x = 10;
+  return &x;  // 함수는 pointer 반환
+}
+
+main() {
+  var num;
+  num = getPointer() + 5;  // 오류: pointer + int
+  return num;
+}

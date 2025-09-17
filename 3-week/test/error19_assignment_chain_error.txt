@@ -1,0 +1,10 @@
+// 타입 오류: 할당 체인에서 타입 불일치
+main() {
+  var a, b, c, ptr;
+  a = 10;
+  ptr = alloc 5;
+  b = a;  // 정상: int = int
+  c = b;  // 정상: int = int
+  a = ptr;  // 오류: int = pointer
+  return c;
+}

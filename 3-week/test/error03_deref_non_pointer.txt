@@ -1,0 +1,7 @@
+// 타입 오류: 포인터가 아닌 값을 역참조
+main() {
+  var x, value;
+  x = 42;
+  value = *x;  // 오류: x는 int이므로 역참조 불가
+  return value;
+}

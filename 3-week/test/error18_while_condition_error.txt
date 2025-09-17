@@ -1,0 +1,13 @@
+// 타입 오류: while 조건에 잘못된 타입
+main() {
+  var ptr, count;
+  ptr = alloc 10;
+  count = 0;
+  while (ptr) {  // 오류: while 조건은 int여야 함
+    count = count + 1;
+    if (count > 5) {
+      ptr = null;
+    }
+  }
+  return count;
+}
