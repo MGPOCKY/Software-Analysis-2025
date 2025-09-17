@@ -30,23 +30,48 @@ function checkGraphvizInstalled(): boolean {
   }
 }
 
+function clearDirectory(dirPath: string): void {
+  if (fs.existsSync(dirPath)) {
+    const files = fs.readdirSync(dirPath);
+    for (const file of files) {
+      const filePath = path.join(dirPath, file);
+      const stat = fs.statSync(filePath);
+      if (stat.isFile()) {
+        fs.unlinkSync(filePath);
+        colorLog("yellow", `🗑️  기존 파일 삭제: ${filePath}`);
+      }
+    }
+  }
+}
+
 async function processAllTIP() {
   colorLog("cyan", "🚀 === TIP 통합 처리 시작 ===\n");
 
-  // 출력 폴더 생성
+  // 출력 폴더 초기화
   const outputDir = "output";
   const cfgDir = path.join(outputDir, "cfg");
   const anfDir = path.join(outputDir, "anf");
 
+  // 출력 폴더 생성
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
     colorLog("blue", `📁 출력 폴더 생성: ${outputDir}/`);
   }
-  if (!fs.existsSync(cfgDir)) {
+
+  // CFG 폴더 초기화 (기존 파일 삭제 후 재생성)
+  if (fs.existsSync(cfgDir)) {
+    clearDirectory(cfgDir);
+    colorLog("blue", `🔄 CFG 폴더 초기화: ${cfgDir}/`);
+  } else {
     fs.mkdirSync(cfgDir, { recursive: true });
     colorLog("blue", `📁 CFG 폴더 생성: ${cfgDir}/`);
   }
-  if (!fs.existsSync(anfDir)) {
+
+  // ANF 폴더 초기화 (기존 파일 삭제 후 재생성)
+  if (fs.existsSync(anfDir)) {
+    clearDirectory(anfDir);
+    colorLog("blue", `🔄 ANF 폴더 초기화: ${anfDir}/`);
+  } else {
     fs.mkdirSync(anfDir, { recursive: true });
     colorLog("blue", `📁 ANF 폴더 생성: ${anfDir}/`);
   }
