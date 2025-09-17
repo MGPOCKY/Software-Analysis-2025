@@ -1,0 +1,5 @@
+a, b, c = map(int, input().split())
+avg =  int((a + b + c) / 5)
+print(a + b + c)
+print(avg)
+print(a + b + c - avg)

@@ -1,0 +1,5 @@
+iterate (n) { var f; f = 1; t1 = n > 0; while (t1) { f = f * n; n = n - 1; t1 = n > 0; } return f; }
+main() {
+  output(iterate(6));
+  return 0;
+}

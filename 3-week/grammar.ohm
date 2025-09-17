@@ -1,0 +1,79 @@
+TIP {
+  // 프로그램: 함수들의 시퀀스
+  Program = Function+
+
+  // 함수: x(x, ..., x){ (var x, ..., x;)? s return e; }
+  Function = identifier "(" Params? ")" "{" VarDecl? Statement* "return" Expression ";" "}"
+
+  Params = identifier ("," identifier)*
+  VarDecl = "var" identifier ("," identifier)* ";"
+
+  // 구문들
+  Statement = AssignmentStmt
+            | OutputStmt
+            | IfStmt
+            | WhileStmt
+            | PointerAssignStmt
+            | DirectPropertyAssignStmt
+            | PropertyAssignStmt
+
+  ReturnStmt = "return" Expression ";"
+
+  AssignmentStmt = identifier "=" Expression ";"
+  OutputStmt = "output" Expression ";"
+  IfStmt = "if" "(" Expression ")" Block ElseClause?
+  ElseClause = "else" Block
+  WhileStmt = "while" "(" Expression ")" Block
+
+  Block = "{" BlockStatement* "}"
+  BlockStatement = Statement | ReturnStmt
+  PointerAssignStmt = "*" Expression "=" Expression ";"
+  PropertyAssignStmt = "(" "*" Expression ")" "." identifier "=" Expression ";"
+  DirectPropertyAssignStmt = identifier "." identifier "=" Expression ";"
+
+  // 표현식들 (우선순위 순서대로)
+  Expression = ComparisonExpr
+
+  ComparisonExpr = ComparisonExpr ">" ArithExpr    -- greater
+                 | ComparisonExpr "==" ArithExpr   -- equal
+                 | ArithExpr
+
+  ArithExpr = ArithExpr "+" MulExpr  -- add
+            | ArithExpr "-" MulExpr  -- sub
+            | MulExpr
+
+  MulExpr = MulExpr "*" UnaryExpr  -- mul
+          | MulExpr "/" UnaryExpr  -- div
+          | UnaryExpr
+
+  UnaryExpr = "*" UnaryExpr     -- deref
+            | "&" identifier    -- address
+            | PrimaryExpr
+
+  PrimaryExpr = "alloc" PrimaryExpr         -- alloc
+              | "null"                      -- null
+              | ObjectLiteral
+              | "input"                     -- input
+              | "(" Expression ")"          -- paren
+              | FunctionCallOrAccess
+              | number                      -- number
+              | identifier                  -- identifier
+
+  FunctionCallOrAccess = FunctionCallOrAccess "(" Args? ")"  -- call
+                       | FunctionCallOrAccess "." identifier -- access
+                       | identifier                           -- base
+
+  Args = Expression ("," Expression)*
+
+  ObjectLiteral = "{" Properties? "}"
+  Properties = Property ("," Property)*
+  Property = identifier ":" Expression
+
+  // 기본 토큰들
+  identifier = letter (alnum | "_")*
+  number = digit+
+
+  // 공백 처리
+  space += comment
+  comment = "//" (~"\n" any)* "\n"
+}
