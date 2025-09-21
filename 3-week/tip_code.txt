@@ -1,5 +1,9 @@
+getX(point) {
+  return point.x;
+}
+
 main() {
-  var person;
-  person = {age: 25, score: 95, level: 3};
-  return person.age + person.score + person.level;
+  var p;
+  p = {x: 42, y: 24};
+  return getX(p);
 }

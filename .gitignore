@@ -9,3 +9,5 @@ output/
 # dist directory
 */dist/
 dist/
+
+.DS_Store
