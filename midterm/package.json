@@ -1,0 +1,24 @@
+{
+  "name": "2-week",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "kyungmink",
+  "type": "commonjs",
+  "main": "index.ts",
+  "scripts": {
+    "parser": "ts-node parser.ts",
+    "cfg": "ts-node cfg.ts",
+    "normal": "ts-node normal.ts",
+    "all": "ts-node parser.ts && ts-node cfg.ts && ts-node normal.ts",
+    "tip-all": "ts-node tip-all-in-one.ts"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "ast-flow-graph": "^1.0.18",
+    "ohm-js": "^17.2.1"
+  }
+}

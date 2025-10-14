@@ -1,0 +1,9 @@
+acc(num) {
+  return num + 1;
+}
+
+main() {
+  var x;
+  x = 42;
+  return acc(x);
+}
