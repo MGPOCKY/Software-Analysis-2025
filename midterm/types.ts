@@ -18,7 +18,7 @@ export interface Program extends ASTNode {
 export interface FunctionDeclaration extends ASTNode {
   type: "FunctionDeclaration";
   name: string;
-  parameters: string[];
+  parameters: string[][];
   localVariables?: string[][]; // var x, ..., x; (optional)
   body: Statement;
   returnExpression: Expression;

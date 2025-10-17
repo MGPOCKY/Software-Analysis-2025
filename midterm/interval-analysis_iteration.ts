@@ -209,7 +209,11 @@ export function analyzeIntervals(program: Program): {
       const env: Env = new Map();
       const f = funcMap.get(node.funcName);
       if (f) {
-        for (const p of f.parameters) env.set(ns(f.name, p), Interval.top());
+        const params = f.parameters.reduce(
+          (acc, arr) => acc.concat(arr),
+          [] as string[]
+        );
+        for (const p of params) env.set(ns(f.name, p), Interval.top());
         if (f.localVariables) {
           for (const vs of f.localVariables) {
             for (const v of vs) {
@@ -297,9 +301,13 @@ export function analyzeIntervals(program: Program): {
       if (!fd) return outEnv;
 
       const env = cloneEnv(outEnv);
-      // 파라미터 초기화
-      for (let i = 0; i < fd.parameters.length; i++) {
-        const p = fd.parameters[i];
+      // 파라미터 초기화 (string[][] → string[])
+      const params = fd.parameters.reduce(
+        (acc, arr) => acc.concat(arr),
+        [] as string[]
+      );
+      for (let i = 0; i < params.length; i++) {
+        const p = params[i];
         const argExpr = callExpr.arguments[i];
         const val = argExpr ? evalExpr(argExpr, outEnv, func) : Interval.top();
         env.set(ns(calleeName, p), val);
