@@ -139,6 +139,9 @@ function thresholdWiden(
   b: Interval,
   thresholds: number[]
 ): Interval {
+  // bottom 보존: widen 시 한 쪽이 bottom이면 다른 쪽을 그대로 사용
+  if (Interval.isBottom(a)) return b;
+  if (Interval.isBottom(b)) return b; // 새로운 정보가 bottom이면 그대로 반영
   const lo = b.lo < a.lo ? thresholdBumpDown(b.lo, thresholds) : b.lo;
   const hi = b.hi > a.hi ? thresholdBumpUp(b.hi, thresholds) : b.hi;
   return { lo, hi };
@@ -162,6 +165,10 @@ function thresholdWidenEnv(
 }
 // 임계값 정규화(스냅): 모든 경계를 {-inf, ..., +inf} 임계값 격자에 맞춤
 function normalizeInterval(i: Interval, thresholds: number[]): Interval {
+  // bottom은 보존
+  if (Interval.isBottom(i)) return i;
+  // 유한 경계는 스냅하지 않고 그대로 유지해 정밀도 보존
+  if (Number.isFinite(i.lo) && Number.isFinite(i.hi)) return i;
   return {
     lo: thresholdBumpDown(i.lo, thresholds),
     hi: thresholdBumpUp(i.hi, thresholds),
@@ -234,7 +241,12 @@ export function analyzeIntervals(program: Program): {
           break;
         case "FunctionCall":
           visitExpr(e.callee);
-          for (const a of e.arguments) visitExpr(a);
+          {
+            const args: any[] = Array.isArray((e as any).arguments)
+              ? ((e as any).arguments as any[]).flat()
+              : (e as any).arguments;
+            for (const a of args) visitExpr(a);
+          }
           break;
         default:
           break;
@@ -301,11 +313,24 @@ export function analyzeIntervals(program: Program): {
       const env: Env = new Map();
       const f = funcMap.get(node.funcName);
       if (f) {
-        for (const p of f.parameters) env.set(ns(f.name, p), Interval.top());
+        // parameters: string[][] → flatten
+        const params = f.parameters.reduce(
+          (acc, arr) => acc.concat(arr),
+          [] as string[]
+        );
+        // 호출자가 있는 entry의 경우 파라미터는 초기화하지 않음 (call edge에서 바인딩)
+        // 프레드가 없는 경우(프로그램 시작점 등)만 Top으로 설정
+        const hasPred = (preds.get(node.id) || []).length > 0;
+        if (!hasPred) {
+          for (const p of params) env.set(ns(f.name, p), Interval.top());
+        }
         if (f.localVariables) {
-          for (const vs of f.localVariables) {
-            for (const v of vs) {
-              env.set(ns(f.name, v), Interval.top());
+          // 호출자가 없는 경우에만 로컬 변수를 Top으로 초기화
+          if (!hasPred) {
+            for (const vs of f.localVariables) {
+              for (const v of vs) {
+                env.set(ns(f.name, v), Interval.top());
+              }
             }
           }
         }
@@ -323,7 +348,17 @@ export function analyzeIntervals(program: Program): {
     const func = node.funcName || "";
     const env = cloneEnv(inEnv);
 
-    if (node.statement) {
+    if (node.type === "after-call" && node.statement) {
+      const stmt = node.statement as any;
+      if (stmt.type === "AssignmentStatement") {
+        let retVal: Interval | undefined;
+        for (const [k, v] of env.entries()) {
+          if (k.endsWith(":@ret"))
+            retVal = retVal ? Interval.join(retVal, v) : v;
+        }
+        env.set(ns(func, stmt.variable), retVal ?? Interval.top());
+      }
+    } else if (node.statement) {
       const stmt = node.statement as Statement;
       switch (stmt.type) {
         case "AssignmentStatement": {
@@ -341,16 +376,6 @@ export function analyzeIntervals(program: Program): {
         }
         default:
           break;
-      }
-    } else if (node.type === "after-call" && node.statement) {
-      const stmt = node.statement as any;
-      if (stmt.type === "AssignmentStatement") {
-        let retVal: Interval | undefined;
-        for (const [k, v] of env.entries()) {
-          if (k.endsWith(":@ret"))
-            retVal = retVal ? Interval.join(retVal, v) : v;
-        }
-        env.set(ns(func, stmt.variable), retVal ?? Interval.top());
       }
     }
 
@@ -379,27 +404,37 @@ export function analyzeIntervals(program: Program): {
       const fd = funcMap.get(calleeName);
       if (!fd) return outEnv;
 
-      const env = cloneEnv(outEnv);
-      for (let i = 0; i < fd.parameters.length; i++) {
-        const p = fd.parameters[i];
-        const argExpr = callExpr.arguments[i];
+      // 호출자 환경을 들고 가지 않고, 피호출자 전용 환경을 새로 시작
+      const env: Env = new Map();
+      const params = fd.parameters.reduce(
+        (acc, arr) => acc.concat(arr),
+        [] as string[]
+      );
+      const args = Array.isArray((callExpr as any).arguments)
+        ? ((callExpr as any).arguments as any[]).flat()
+        : (callExpr as any).arguments;
+      for (let i = 0; i < params.length; i++) {
+        const p = params[i];
+        const argExpr = args[i];
         const val = argExpr ? evalExpr(argExpr, outEnv, func) : Interval.top();
         env.set(ns(calleeName, p), val);
       }
       if (fd.localVariables) {
         for (const v of fd.localVariables) {
           for (const vv of v) {
-            env.set(
-              ns(calleeName, vv),
-              env.get(ns(calleeName, vv)) ?? Interval.top()
-            );
+            env.set(ns(calleeName, vv), Interval.top());
           }
         }
       }
-      env.set(
-        ns(calleeName, "@ret"),
-        env.get(ns(calleeName, "@ret")) ?? Interval.bottom()
-      );
+      env.set(ns(calleeName, "@ret"), Interval.bottom());
+      return env;
+    }
+    if (label === "return") {
+      // 반환 시에는 피호출자의 반환값(@ret)만 전달
+      const env = new Map<string, Interval>();
+      for (const [k, v] of outEnv.entries()) {
+        if (k.endsWith(":@ret")) env.set(k, v);
+      }
       return env;
     }
     return outEnv;
