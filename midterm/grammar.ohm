@@ -3,7 +3,7 @@ TIP {
   Program = Function+
 
   // 함수: x(x, ..., x){ (var x, ..., x;)? s return e; }
-  Function = identifier "(" Params? ")" "{" VarDecl? Statement* "return" Expression ";" "}"
+  Function = identifier "(" Params? ")" "{" VarDecl? Statement* ReturnStmt "}"
 
   Params = identifier ("," identifier)*
   VarDecl = "var" identifier ("," identifier)* ";"
@@ -13,17 +13,19 @@ TIP {
             | OutputStmt
             | IfStmt
             | WhileStmt
+            | CallStmt
 
-  ReturnStmt = "return" Expression ";"
 
   AssignmentStmt = identifier "=" Expression ";"
   OutputStmt = "output" Expression ";"
+  CallStmt = identifier "(" Args? ")" ";"
   IfStmt = "if" "(" Expression ")" Block ElseClause?
   ElseClause = "else" Block
   WhileStmt = "while" "(" Expression ")" Block
+  ReturnStmt = "return" Expression ";"
 
   Block = "{" BlockStatement* "}"
-  BlockStatement = Statement | ReturnStmt
+  BlockStatement = Statement
 
 
   // 표현식들 (우선순위 순서대로)
@@ -51,6 +53,8 @@ TIP {
 
   FunctionCallOrAccess = FunctionCallOrAccess "(" Args? ")"  -- call
                        | identifier                           -- base
+
+
 
   Args = Expression ("," Expression)*
 

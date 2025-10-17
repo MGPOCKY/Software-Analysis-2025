@@ -56,9 +56,7 @@ export class TIPParser {
         _lbrace,
         varDecl,
         statements,
-        _return,
-        returnExpr,
-        _semi,
+        returnStmt,
         _rbrace
       ) {
         const paramList = params.numChildren > 0 ? params.toAST() : [];
@@ -83,8 +81,12 @@ export class TIPParser {
           parameters: paramList,
           localVariables: localVars,
           body: bodyStmt,
-          returnExpression: returnExpr.toAST(),
+          returnExpression: returnStmt.toAST(),
         } as FunctionDeclaration;
+      },
+      ReturnStmt(_return, expr, _semi) {
+        // ReturnStmt는 최종 리턴 식만 반환(Statement 노드가 아님)
+        return expr.toAST();
       },
 
       // 매개변수 목록
@@ -106,6 +108,21 @@ export class TIPParser {
       // 구문들
       Statement(stmt) {
         return stmt.toAST();
+      },
+
+      CallStmt(id, _lparen, args, _rparen, _semi) {
+        const argList = args.numChildren > 0 ? args.toAST() : [];
+        return {
+          type: "CallStatement",
+          expression: {
+            type: "FunctionCall",
+            callee: {
+              type: "Variable",
+              name: id.sourceString,
+            },
+            arguments: argList,
+          },
+        };
       },
 
       AssignmentStmt(variable, _eq, expr, _semi) {
@@ -167,12 +184,7 @@ export class TIPParser {
         return stmt.toAST();
       },
 
-      ReturnStmt(_return, expr, _semi) {
-        return {
-          type: "ReturnStatement",
-          expression: expr.toAST(),
-        };
-      },
+      // 함수 내부 조기 return은 문법상 제거됨
 
       // 표현식들
       ComparisonExpr_greater(left, _op, right) {
@@ -262,6 +274,9 @@ export class TIPParser {
           name: id.sourceString,
         } as Variable;
       },
+
+      // CallStmt 에서 받은 형태는 FunctionCallOrAccess '(' Args? ')' ';' 이므로
+      // CallStmt에서 이미 expr.toAST()가 함수 호출로 온다고 가정
 
       Args(first, _commas, rest) {
         return [first.toAST(), ...rest.children.map((arg: any) => arg.toAST())];

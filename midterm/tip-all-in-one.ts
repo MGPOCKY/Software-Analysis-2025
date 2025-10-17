@@ -1,5 +1,7 @@
 import TIPParser from "./parser";
 import { TIPCFGConverter } from "./tip-cfg-converter";
+import { TIPICFGConverter } from "./tip-icfg-converter";
+import { runIntervalAnalysisFromFile } from "./interval-analysis";
 import * as fs from "fs";
 import * as path from "path";
 import { execSync } from "child_process";
@@ -35,7 +37,7 @@ async function processAllTIP() {
   // 출력 폴더 생성
   const outputDir = "output";
   const cfgDir = path.join(outputDir, "cfg");
-  const anfDir = path.join(outputDir, "anf");
+  const icfgDir = path.join(outputDir, "icfg");
 
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -45,9 +47,9 @@ async function processAllTIP() {
     fs.mkdirSync(cfgDir, { recursive: true });
     colorLog("blue", `📁 CFG 폴더 생성: ${cfgDir}/`);
   }
-  if (!fs.existsSync(anfDir)) {
-    fs.mkdirSync(anfDir, { recursive: true });
-    colorLog("blue", `📁 ANF 폴더 생성: ${anfDir}/`);
+  if (!fs.existsSync(icfgDir)) {
+    fs.mkdirSync(icfgDir, { recursive: true });
+    colorLog("blue", `📁 ICFG 폴더 생성: ${icfgDir}/`);
   }
 
   // 1. tip_code.txt 파일 읽기
@@ -107,8 +109,33 @@ async function processAllTIP() {
     colorLog("blue", `📄 CFG DOT 파일: ${dotFileName}`);
   }
 
+  // 4. ICFG 생성 (단일 그래프)
+  colorLog("yellow", "\n🔄 3단계: ICFG 생성...");
+  const icfgConverter = new TIPICFGConverter();
+  const unifiedICFG = icfgConverter.convertProgramUnified(parseResult.ast!);
+  colorLog("green", `✅ ICFG 생성 완료 (단일 그래프)`);
+
+  // ICFG 단일 DOT 파일 생성
+  const icfgFiles: string[] = [];
+  const icfgCombinedFile = path.join(icfgDir, `main.dot`);
+  fs.writeFileSync(icfgCombinedFile, unifiedICFG.toDot("ICFG"));
+  icfgFiles.push(icfgCombinedFile);
+  colorLog("blue", `📄 ICFG DOT 파일: ${icfgCombinedFile}`);
+
+  // 4.5 Interval Analysis (Monotone Framework, widening/narrowing 미적용)
+  colorLog("yellow", "\n🧮 3.5단계: Interval Analysis...");
+  try {
+    const intervalsPath = runIntervalAnalysisFromFile(inputFile, outputDir);
+    colorLog("green", `✅ Interval 결과 저장: ${intervalsPath}`);
+  } catch (e) {
+    colorLog(
+      "red",
+      `❌ Interval 분석 실패: ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
+
   // 5. Graphviz 설치 확인 및 PDF 변환
-  colorLog("yellow", "\n🖼️  3단계: PDF 변환...");
+  colorLog("yellow", "\n🖼️  4단계: PDF 변환...");
 
   if (!checkGraphvizInstalled()) {
     colorLog("red", "❌ Graphviz가 설치되지 않았습니다.");
@@ -120,7 +147,7 @@ async function processAllTIP() {
       "blue",
       "\n📄 DOT 파일들이 생성되었습니다. Graphviz 설치 후 다음 명령어로 PDF 변환 가능:"
     );
-    [...cfgFiles].forEach((file) => {
+    [...cfgFiles, ...icfgFiles].forEach((file) => {
       const pdfFile = file.replace(".dot", ".pdf");
       colorLog("blue", `   dot -Tpdf ${file} -o ${pdfFile}`);
     });
@@ -129,9 +156,9 @@ async function processAllTIP() {
 
   colorLog("green", "✅ Graphviz 설치 확인됨");
 
-  // CFG PDF 변환
+  // CFG/ICFG PDF 변환
   colorLog("blue", "🔄 CFG PDF 변환 중...");
-  for (const dotFile of cfgFiles) {
+  for (const dotFile of [...cfgFiles, ...icfgFiles]) {
     try {
       const pdfFile = dotFile.replace(".dot", ".pdf");
       execSync(`dot -Tpdf "${dotFile}" -o "${pdfFile}"`, { stdio: "ignore" });
@@ -150,6 +177,15 @@ async function processAllTIP() {
 
   colorLog("blue", "\n📈 CFG (cfg/ 폴더):");
   cfgFiles.forEach((file) => {
+    colorLog("blue", `  - ${file}`);
+    const pdfFile = file.replace(".dot", ".pdf");
+    if (fs.existsSync(pdfFile)) {
+      colorLog("blue", `  - ${pdfFile}`);
+    }
+  });
+
+  colorLog("blue", "\n📉 ICFG (icfg/ 폴더):");
+  icfgFiles.forEach((file) => {
     colorLog("blue", `  - ${file}`);
     const pdfFile = file.replace(".dot", ".pdf");
     if (fs.existsSync(pdfFile)) {

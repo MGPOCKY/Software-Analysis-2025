@@ -1,4 +1,3 @@
-import { TIPParser } from "./parser";
 import {
   Program,
   FunctionDeclaration,
@@ -8,15 +7,22 @@ import {
   IfStatement,
   WhileStatement,
 } from "./types";
-import * as fs from "fs";
 
 // CFG 노드 타입
 interface CFGNode {
   id: number;
   label: string;
-  type: "entry" | "exit" | "statement" | "condition" | "merge";
+  type:
+    | "entry"
+    | "exit"
+    | "statement"
+    | "condition"
+    | "merge"
+    | "call"
+    | "after-call";
   statement?: Statement;
   expression?: Expression;
+  funcName?: string;
 }
 
 // CFG 엣지 타입
@@ -24,6 +30,7 @@ interface CFGEdge {
   from: number;
   to: number;
   label?: string; // "true", "false" 등
+  dotted?: boolean;
 }
 
 // CFG 클래스
@@ -49,17 +56,47 @@ class ControlFlowGraph {
     return node;
   }
 
-  addEdge(from: number, to: number, label?: string) {
-    this.edges.push({ from, to, label });
+  addEdge(from: number, to: number, label?: string, dotted?: boolean) {
+    this.edges.push({ from, to, label, dotted: dotted ?? false });
   }
 
-  // DOT 파일 생성
+  // DOT 파일 생성 (함수별 서브그래프 그룹화)
   toDot(functionName: string): string {
     let dot = `digraph "${functionName}" {\n`;
     dot += "  node [shape=box];\n";
 
-    // 노드 정의
+    // 그룹화: funcName별 서브그래프
+    const groups = new Map<string, CFGNode[]>();
+    const ungrouped: CFGNode[] = [];
     for (const node of this.nodes.values()) {
+      if (node.funcName) {
+        const arr = groups.get(node.funcName) || [];
+        arr.push(node);
+        groups.set(node.funcName, arr);
+      } else {
+        ungrouped.push(node);
+      }
+    }
+
+    for (const [fname, nodes] of groups.entries()) {
+      dot += `  subgraph "cluster_${this.escapeLabel(fname)}" {\n`;
+      dot += `    label=\"${this.escapeLabel(fname)}\";\n`;
+      for (const node of nodes) {
+        const shape = node.type === "condition" ? "diamond" : "box";
+        const color =
+          node.type === "entry"
+            ? "green"
+            : node.type === "exit"
+            ? "red"
+            : "lightblue";
+        dot += `    ${node.id} [label=\"${this.escapeLabel(
+          node.label
+        )}\", shape=${shape}, fillcolor=${color}, style=filled];\n`;
+      }
+      dot += "  }\n";
+    }
+
+    for (const node of ungrouped) {
       const shape = node.type === "condition" ? "diamond" : "box";
       const color =
         node.type === "entry"
@@ -67,16 +104,18 @@ class ControlFlowGraph {
           : node.type === "exit"
           ? "red"
           : "lightblue";
-
-      dot += `  ${node.id} [label="${this.escapeLabel(
+      dot += `  ${node.id} [label=\"${this.escapeLabel(
         node.label
-      )}", shape=${shape}, fillcolor=${color}, style=filled];\n`;
+      )}\", shape=${shape}, fillcolor=${color}, style=filled];\n`;
     }
 
     // 엣지 정의
     for (const edge of this.edges) {
-      const label = edge.label ? ` [label="${edge.label}"]` : "";
-      dot += `  ${edge.from} -> ${edge.to}${label};\n`;
+      const attrs: string[] = [];
+      if (edge.label) attrs.push(`label=\"${edge.label}\"`);
+      if (edge.dotted) attrs.push("style=dashed");
+      const attrStr = attrs.length ? ` [${attrs.join(", ")}]` : "";
+      dot += `  ${edge.from} -> ${edge.to}${attrStr};\n`;
     }
 
     dot += "}\n";
@@ -88,17 +127,117 @@ class ControlFlowGraph {
   }
 }
 
-// TIP AST를 CFG로 변환하는 클래스
-class TIPCFGConverter {
+// TIP AST를 ICFG로 변환하는 클래스
+class TIPICFGConverter {
+  private tempCounter = 0;
+
+  generateTempVar(): string {
+    return `_t${this.tempCounter++}`;
+  }
+
   convertProgram(program: Program): Map<string, ControlFlowGraph> {
     const cfgs = new Map<string, ControlFlowGraph>();
 
     for (const func of program.functions) {
+      this.tempCounter = 0;
       const cfg = this.convertFunction(func);
       cfgs.set(func.name, cfg);
     }
 
     return cfgs;
+  }
+
+  // 단일 ICFG를 생성해 반환
+  convertProgramUnified(program: Program): ControlFlowGraph {
+    const global = new ControlFlowGraph();
+    const funcToLocal: Map<string, ControlFlowGraph> = new Map();
+    const funcEntryExit: Map<string, { entry: number; exit: number }> =
+      new Map();
+    const localToGlobal: Map<string, number> = new Map(); // `${funcName}:${localId}` -> globalId
+
+    // 1) 각 함수 로컬 그래프 생성 후 글로벌에 복사
+    for (const func of program.functions) {
+      this.tempCounter = 0;
+      const local = this.convertFunction(func);
+      funcToLocal.set(func.name, local);
+
+      let entryId: number | undefined;
+      let exitId: number | undefined;
+
+      for (const node of local.nodes.values()) {
+        const newNode = global.addNode(
+          `${node.label}`,
+          node.type,
+          node.statement as any,
+          node.expression as any
+        );
+        newNode.funcName = func.name;
+        localToGlobal.set(`${func.name}:${node.id}`, newNode.id);
+        if (node.type === "entry") entryId = newNode.id;
+        if (node.type === "exit") exitId = newNode.id;
+      }
+
+      if (entryId === undefined || exitId === undefined) {
+        throw new Error(
+          `Function ${func.name} missing entry/exit in ICFG conversion`
+        );
+      }
+
+      funcEntryExit.set(func.name, { entry: entryId, exit: exitId });
+
+      for (const edge of local.edges) {
+        const gFrom = localToGlobal.get(`${func.name}:${edge.from}`)!;
+        const gTo = localToGlobal.get(`${func.name}:${edge.to}`)!;
+        global.addEdge(gFrom, gTo, edge.label, edge.dotted);
+      }
+    }
+
+    // 2) interprocedural 엣지 추가 (call-to-return 확장)
+    const getCalleeNameFromCall = (callExpr: any): string | undefined => {
+      let c = callExpr && callExpr.callee;
+      while (c && c.type === "FunctionCall") c = c.callee;
+      if (c && c.type === "Variable") return c.name;
+      return undefined;
+    };
+
+    for (const [callerName, local] of funcToLocal) {
+      for (const edge of local.edges) {
+        if (edge.label === "call-to-return") {
+          const callNode = local.nodes.get(edge.from);
+          const afterLocalId = edge.to;
+          let calleeName: string | undefined;
+          if (callNode && callNode.statement) {
+            const stmt: any = callNode.statement;
+            if (
+              stmt.type === "AssignmentStatement" &&
+              stmt.expression &&
+              stmt.expression.type === "FunctionCall"
+            ) {
+              calleeName = getCalleeNameFromCall(stmt.expression);
+            } else if (
+              stmt.type === "CallStatement" &&
+              stmt.expression &&
+              stmt.expression.type === "FunctionCall"
+            ) {
+              calleeName = getCalleeNameFromCall(stmt.expression);
+            }
+          }
+          if (!calleeName) continue;
+          const entryExit = funcEntryExit.get(calleeName);
+          if (!entryExit) continue;
+
+          const gFrom = localToGlobal.get(`${callerName}:${edge.from}`)!;
+          const gAfter = localToGlobal.get(`${callerName}:${afterLocalId}`)!;
+          const calleeEntry = entryExit.entry;
+          const calleeExit = entryExit.exit;
+
+          global.addEdge(gFrom, calleeEntry, "call");
+          global.addEdge(calleeExit, gAfter, "return");
+        }
+      }
+    }
+
+    return global;
   }
 
   convertFunction(func: FunctionDeclaration): ControlFlowGraph {
@@ -113,10 +252,14 @@ class TIPCFGConverter {
     // Entry에서 함수 본문으로 연결
     cfg.addEdge(entryNode.id, entryId);
 
-    // Return 문 처리
+    // Return 문 처리 (실제 ReturnStatement를 statement로 부착)
     const returnNode = cfg.addNode(
-      `return ${this.expressionToString(func.returnExpression)}`,
-      "statement"
+      `@ret = ${this.expressionToString(func.returnExpression)}`,
+      "statement",
+      {
+        type: "ReturnStatement",
+        expression: func.returnExpression,
+      } as any
     );
 
     // 모든 exit에서 return으로 연결
@@ -137,12 +280,27 @@ class TIPCFGConverter {
   ): { entryId: number; exitIds: number[] } {
     switch (stmt.type) {
       case "AssignmentStatement":
-        const assignNode = cfg.addNode(
-          `${stmt.variable} = ${this.expressionToString(stmt.expression)}`,
-          "statement",
-          stmt
-        );
-        return { entryId: assignNode.id, exitIds: [assignNode.id] };
+        if (stmt.expression.type === "FunctionCall") {
+          const callNode = cfg.addNode(
+            `${stmt.variable} = ${this.expressionToString(stmt.expression)}`,
+            "call",
+            stmt
+          );
+          const afterCallNode = cfg.addNode(
+            `${stmt.variable} = ${this.expressionToString(stmt.expression)}`,
+            "after-call",
+            stmt
+          );
+          cfg.addEdge(callNode.id, afterCallNode.id, "call-to-return", true);
+          return { entryId: callNode.id, exitIds: [afterCallNode.id] };
+        } else {
+          const assignNode = cfg.addNode(
+            `${stmt.variable} = ${this.expressionToString(stmt.expression)}`,
+            "statement",
+            stmt
+          );
+          return { entryId: assignNode.id, exitIds: [assignNode.id] };
+        }
 
       case "OutputStatement":
         const outputNode = cfg.addNode(
@@ -163,19 +321,26 @@ class TIPCFGConverter {
 
       case "ReturnStatement":
         const returnNode = cfg.addNode(
-          `return ${this.expressionToString(stmt.expression)}`,
+          `@ret = ${this.expressionToString(stmt.expression)}`,
           "statement",
           stmt
         );
         return { entryId: returnNode.id, exitIds: [returnNode.id] };
 
       case "CallStatement":
+        const variable = this.generateTempVar();
         const callNode = cfg.addNode(
-          `${this.expressionToString(stmt.expression)}`,
-          "statement",
+          `${variable} = ${this.expressionToString(stmt.expression)}`,
+          "call",
           stmt
         );
-        return { entryId: callNode.id, exitIds: [callNode.id] };
+        const afterCallNode = cfg.addNode(
+          `${variable} = ${this.expressionToString(stmt.expression)}`,
+          "after-call",
+          stmt
+        );
+        cfg.addEdge(callNode.id, afterCallNode.id, "call-to-return", true);
+        return { entryId: callNode.id, exitIds: [afterCallNode.id] };
 
       default:
         const unknownNode = cfg.addNode(
@@ -340,54 +505,4 @@ class TIPCFGConverter {
   }
 }
 
-// 메인 함수
-async function generateTIPCFG(
-  tipCode: string,
-  outputName: string = "tip-program"
-) {
-  console.log("=== TIP AST to CFG Converter ===\n");
-
-  // 1. TIP 코드 파싱
-  const parser = new TIPParser();
-  const parseResult = parser.parse(tipCode);
-
-  if (!parseResult.success) {
-    console.error("TIP 파싱 실패:", parseResult.error);
-    return;
-  }
-
-  console.log("✅ TIP 파싱 성공");
-
-  // 2. AST를 CFG로 변환
-  const converter = new TIPCFGConverter();
-  const cfgs = converter.convertProgram(parseResult.ast!);
-
-  console.log(`\n✅ CFG 생성 완료 (${cfgs.size}개 함수)`);
-
-  // 3. DOT 파일 생성
-  for (const [funcName, cfg] of cfgs.entries()) {
-    const dotContent = cfg.toDot(funcName);
-    const dotFileName = `${outputName}-${funcName}.dot`;
-    fs.writeFileSync(dotFileName, dotContent);
-    console.log(`✅ DOT 파일 생성: ${dotFileName}`);
-
-    console.log(`\n--- ${funcName} CFG 정보 ---`);
-    console.log(`노드 수: ${cfg.nodes.size}`);
-    console.log(`엣지 수: ${cfg.edges.length}`);
-  }
-
-  console.log("\n=== 완료 ===");
-  console.log("DOT 파일을 Graphviz로 시각화하려면:");
-  console.log(`dot -Tpng ${outputName}-*.dot -o {함수명}.png`);
-}
-
-// 테스트 실행
-if (require.main === module) {
-  const testTipCode = `
-  iterate (n) { var f; f = 1; while (n > 0) { f = f * n; n = n - 1; } return f; }
-  `;
-
-  generateTIPCFG(testTipCode, "factorial-example");
-}
-
-export { TIPCFGConverter, ControlFlowGraph, generateTIPCFG };
+export { TIPICFGConverter, ControlFlowGraph };

@@ -19,7 +19,7 @@ export interface FunctionDeclaration extends ASTNode {
   type: "FunctionDeclaration";
   name: string;
   parameters: string[];
-  localVariables?: string[]; // var x, ..., x; (optional)
+  localVariables?: string[][]; // var x, ..., x; (optional)
   body: Statement;
   returnExpression: Expression;
 }
@@ -31,7 +31,8 @@ export type Statement =
   | SequenceStatement
   | IfStatement
   | WhileStatement
-  | ReturnStatement;
+  | ReturnStatement
+  | CallStatement;
 
 export interface AssignmentStatement extends ASTNode {
   type: "AssignmentStatement";
@@ -65,6 +66,11 @@ export interface WhileStatement extends ASTNode {
 export interface ReturnStatement extends ASTNode {
   type: "ReturnStatement";
   expression: Expression;
+}
+
+export interface CallStatement extends ASTNode {
+  type: "CallStatement";
+  expression: FunctionCall;
 }
 
 // 표현식들 (Expression)
