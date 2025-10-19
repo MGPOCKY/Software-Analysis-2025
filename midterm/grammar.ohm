@@ -14,6 +14,7 @@ TIP {
             | IfStmt
             | WhileStmt
             | CallStmt
+            | AssertStmt
 
 
   AssignmentStmt = identifier "=" Expression ";"
@@ -23,6 +24,8 @@ TIP {
   ElseClause = "else" Block
   WhileStmt = "while" "(" Expression ")" Block
   ReturnStmt = "return" Expression ";"
+
+  AssertStmt = "assert" "(" Expression ")" ";"
 
   Block = "{" BlockStatement* "}"
   BlockStatement = Statement

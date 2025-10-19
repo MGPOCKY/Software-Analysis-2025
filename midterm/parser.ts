@@ -12,6 +12,7 @@ import {
   IfStatement,
   WhileStatement,
   ReturnStatement,
+  AssertStatement,
   NumberLiteral,
   Variable,
   BinaryExpression,
@@ -182,6 +183,12 @@ export class TIPParser {
 
       BlockStatement(stmt) {
         return stmt.toAST();
+      },
+      AssertStmt(_assert, _lp, condition, _rp, _semi) {
+        return {
+          type: "AssertStatement",
+          condition: condition.toAST(),
+        } as AssertStatement;
       },
 
       // 함수 내부 조기 return은 문법상 제거됨

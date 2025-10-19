@@ -177,6 +177,16 @@ class TIPCFGConverter {
         );
         return { entryId: callNode.id, exitIds: [callNode.id] };
 
+      case "AssertStatement":
+        // assert는 실행 중단을 일으키지 않으며, 분석 단계에서 제약으로 처리
+        const assertNode = cfg.addNode(
+          `assert(${this.expressionToString(stmt.condition)})`,
+          "statement",
+          stmt,
+          stmt.condition
+        );
+        return { entryId: assertNode.id, exitIds: [assertNode.id] };
+
       default:
         const unknownNode = cfg.addNode(
           `Unknown: ${(stmt as any).type}`,

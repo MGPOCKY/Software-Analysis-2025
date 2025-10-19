@@ -32,7 +32,8 @@ export type Statement =
   | IfStatement
   | WhileStatement
   | ReturnStatement
-  | CallStatement;
+  | CallStatement
+  | AssertStatement;
 
 export interface AssignmentStatement extends ASTNode {
   type: "AssignmentStatement";
@@ -71,6 +72,11 @@ export interface ReturnStatement extends ASTNode {
 export interface CallStatement extends ASTNode {
   type: "CallStatement";
   expression: FunctionCall;
+}
+
+export interface AssertStatement extends ASTNode {
+  type: "AssertStatement";
+  condition: Expression; // boolean expression expected
 }
 
 // 표현식들 (Expression)

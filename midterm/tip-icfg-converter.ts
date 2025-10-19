@@ -342,6 +342,16 @@ class TIPICFGConverter {
         cfg.addEdge(callNode.id, afterCallNode.id, "call-to-return", true);
         return { entryId: callNode.id, exitIds: [afterCallNode.id] };
 
+      case "AssertStatement":
+        // assert는 단일 statement 노드로 표현 (제약은 해석기에서 적용)
+        const assertNode = cfg.addNode(
+          `assert(${this.expressionToString(stmt.condition)})`,
+          "statement",
+          stmt,
+          stmt.condition
+        );
+        return { entryId: assertNode.id, exitIds: [assertNode.id] };
+
       default:
         const unknownNode = cfg.addNode(
           `Unknown: ${(stmt as any).type}`,

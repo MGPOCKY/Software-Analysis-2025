@@ -202,6 +202,10 @@ function evalExpr(expr: Expression, env: Env, funcName: string): Interval {
           return Interval.mul(l, r);
         case "/":
           return Interval.div(l, r);
+        case ">":
+        case "==":
+          // 비교식의 값은 불리언이지만 수치 구간으로 표현 불가 -> Top 반환
+          return Interval.top();
         default:
           return Interval.top();
       }
@@ -213,6 +217,77 @@ function evalExpr(expr: Expression, env: Env, funcName: string): Interval {
     default:
       return Interval.top();
   }
+}
+
+function refineEnvByCondition(
+  cond: Expression | undefined,
+  env: Env,
+  funcName: string,
+  truthy: boolean
+): Env {
+  if (!cond || cond.type !== "BinaryExpression") return env;
+  const be = cond as any;
+  const out = cloneEnv(env);
+
+  const isVar = (e: Expression): e is Variable => e.type === "Variable";
+  const isNum = (e: Expression): e is NumberLiteral =>
+    e.type === "NumberLiteral";
+
+  if (be.operator === ">") {
+    // left > right  (falsy는 left <= right)
+    if (isVar(be.left) && isNum(be.right)) {
+      const vName = ns(funcName, be.left.name);
+      const cur = out.get(vName) ?? Interval.top();
+      if (truthy) {
+        out.set(vName, {
+          lo: Math.max(cur.lo, be.right.value + 1),
+          hi: cur.hi,
+        });
+      } else {
+        out.set(vName, { lo: cur.lo, hi: Math.min(cur.hi, be.right.value) });
+      }
+    } else if (isNum(be.left) && isVar(be.right)) {
+      const vName = ns(funcName, be.right.name);
+      const cur = out.get(vName) ?? Interval.top();
+      if (truthy) {
+        // c > y  => y < c  => y.hi <= c-1
+        out.set(vName, { lo: cur.lo, hi: Math.min(cur.hi, be.left.value - 1) });
+      } else {
+        // !(c > y) => y >= c
+        out.set(vName, { lo: Math.max(cur.lo, be.left.value), hi: cur.hi });
+      }
+    }
+    return out;
+  }
+
+  if (be.operator === "==") {
+    if (isVar(be.left) && isNum(be.right)) {
+      const vName = ns(funcName, be.left.name);
+      const cur = out.get(vName) ?? Interval.top();
+      if (truthy) {
+        out.set(vName, Interval.meet(cur, Interval.ofConst(be.right.value)));
+      } else {
+        // x != c 는 구간 도메인에서 표현 어려움 -> 변화 없음
+      }
+    } else if (isNum(be.left) && isVar(be.right)) {
+      const vName = ns(funcName, be.right.name);
+      const cur = out.get(vName) ?? Interval.top();
+      if (truthy) {
+        out.set(vName, Interval.meet(cur, Interval.ofConst(be.left.value)));
+      }
+    } else if (isVar(be.left) && isVar(be.right) && truthy) {
+      const lName = ns(funcName, be.left.name);
+      const rName = ns(funcName, be.right.name);
+      const lCur = out.get(lName) ?? Interval.top();
+      const rCur = out.get(rName) ?? Interval.top();
+      const inter = Interval.meet(lCur, rCur);
+      out.set(lName, inter);
+      out.set(rName, inter);
+    }
+    return out;
+  }
+
+  return out;
 }
 
 interface AnalysisResult {
@@ -369,6 +444,15 @@ export function analyzeIntervals(program: Program): {
           }
           break;
         }
+        case "AssertStatement": {
+          const refined = refineEnvByCondition(
+            (stmt as any).condition,
+            env,
+            func,
+            true
+          );
+          return refined;
+        }
         case "ReturnStatement": {
           const val = evalExpr((stmt as any).expression, env, func);
           env.set(ns(func, "@ret"), val);
@@ -386,6 +470,13 @@ export function analyzeIntervals(program: Program): {
     const edgeList = succs.get(from) || [];
     const label = edgeList.find((e) => e.to === to)?.label;
     if (!label) return outEnv;
+    if (label === "true" || label === "false") {
+      const fromNode = icfg.nodes.get(from)!;
+      const condExpr = fromNode.expression; // condition node carries expression
+      const funcName = fromNode.funcName || "";
+      const truthy = label === "true";
+      return refineEnvByCondition(condExpr as any, outEnv, funcName, truthy);
+    }
     if (label === "call") {
       // 인자 → 파라미터 바인딩
       const callerNode = icfg.nodes.get(from)!;
