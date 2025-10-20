@@ -260,33 +260,6 @@ function refineEnvByCondition(
     return out;
   }
 
-  if (be.operator === "==") {
-    if (isVar(be.left) && isNum(be.right)) {
-      const vName = ns(funcName, be.left.name);
-      const cur = out.get(vName) ?? Interval.top();
-      if (truthy) {
-        out.set(vName, Interval.meet(cur, Interval.ofConst(be.right.value)));
-      } else {
-        // x != c 는 구간 도메인에서 표현 어려움 -> 변화 없음
-      }
-    } else if (isNum(be.left) && isVar(be.right)) {
-      const vName = ns(funcName, be.right.name);
-      const cur = out.get(vName) ?? Interval.top();
-      if (truthy) {
-        out.set(vName, Interval.meet(cur, Interval.ofConst(be.left.value)));
-      }
-    } else if (isVar(be.left) && isVar(be.right) && truthy) {
-      const lName = ns(funcName, be.left.name);
-      const rName = ns(funcName, be.right.name);
-      const lCur = out.get(lName) ?? Interval.top();
-      const rCur = out.get(rName) ?? Interval.top();
-      const inter = Interval.meet(lCur, rCur);
-      out.set(lName, inter);
-      out.set(rName, inter);
-    }
-    return out;
-  }
-
   return out;
 }
 
@@ -334,6 +307,10 @@ export function analyzeIntervals(program: Program): {
           break;
         case "OutputStatement":
           visitExpr((s as any).expression);
+          break;
+        case "AssertStatement":
+          // assert의 조건식에 등장하는 상수들도 임계값으로 포함
+          visitExpr((s as any).condition);
           break;
         case "IfStatement":
           visitExpr((s as any).condition);
@@ -469,13 +446,22 @@ export function analyzeIntervals(program: Program): {
   function edgeTransfer(from: number, to: number, outEnv: Env): Env {
     const edgeList = succs.get(from) || [];
     const label = edgeList.find((e) => e.to === to)?.label;
-    if (!label) return outEnv;
+    const fromNode = icfg.nodes.get(from)!;
     if (label === "true" || label === "false") {
-      const fromNode = icfg.nodes.get(from)!;
       const condExpr = fromNode.expression; // condition node carries expression
       const funcName = fromNode.funcName || "";
       const truthy = label === "true";
       return refineEnvByCondition(condExpr as any, outEnv, funcName, truthy);
+    }
+    // 라벨이 없더라도, assert 노드에서 나가는 엣지는 조건이 항상 참이므로 필터를 적용
+    if (
+      !label &&
+      fromNode.statement &&
+      (fromNode.statement as any).type === "AssertStatement"
+    ) {
+      const funcName = fromNode.funcName || "";
+      const condExpr = fromNode.expression;
+      return refineEnvByCondition(condExpr as any, outEnv, funcName, true);
     }
     if (label === "call") {
       // 인자 → 파라미터 바인딩
@@ -647,12 +633,18 @@ export function runIntervalAnalysisFromFile(
   const outJson: any = {};
   for (const [nid, env] of result.nodeOut.entries()) {
     const entry: any = {};
+    const toBound = (x: number) =>
+      x === POS_INF ? "inf" : x === NEG_INF ? "-inf" : x;
     for (const [k, v] of env.entries()) {
-      const toBound = (x: number) =>
-        x === POS_INF ? "inf" : x === NEG_INF ? "-inf" : x;
       entry[k] = [toBound(v.lo), toBound(v.hi)];
     }
-    outJson[nid] = entry;
+    const nodeMeta = graph.nodes.get(nid)! as any;
+    outJson[nid] = {
+      func: nodeMeta?.funcName ?? null,
+      type: nodeMeta?.type ?? null,
+      label: nodeMeta?.label ?? null,
+      out: entry,
+    };
   }
   const outPath = path.join(outputDir, "intervals.json");
   fs.writeFileSync(outPath, JSON.stringify(outJson, null, 2));

@@ -506,7 +506,6 @@ class TIPICFGConverter {
           .map((arg) => this.expressionToString(arg))
           .join(", ");
         return `${this.expressionToString(expr.callee)}(${args})`;
-
       case "InputExpression":
         return "input";
       default:

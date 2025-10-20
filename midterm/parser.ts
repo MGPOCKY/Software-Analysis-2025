@@ -112,18 +112,25 @@ export class TIPParser {
       },
 
       CallStmt(id, _lparen, args, _rparen, _semi) {
-        const argList = args.numChildren > 0 ? args.toAST() : [];
-        return {
-          type: "CallStatement",
-          expression: {
-            type: "FunctionCall",
-            callee: {
-              type: "Variable",
-              name: id.sourceString,
+        if (id.sourceString === "assert") {
+          return {
+            type: "AssertStatement",
+            condition: args.children[0].toAST()[0],
+          } as AssertStatement;
+        } else {
+          const argList = args.numChildren > 0 ? args.toAST() : [];
+          return {
+            type: "CallStatement",
+            expression: {
+              type: "FunctionCall",
+              callee: {
+                type: "Variable",
+                name: id.sourceString,
+              },
+              arguments: argList,
             },
-            arguments: argList,
-          },
-        };
+          };
+        }
       },
 
       AssignmentStmt(variable, _eq, expr, _semi) {
@@ -183,12 +190,6 @@ export class TIPParser {
 
       BlockStatement(stmt) {
         return stmt.toAST();
-      },
-      AssertStmt(_assert, _lp, condition, _rp, _semi) {
-        return {
-          type: "AssertStatement",
-          condition: condition.toAST(),
-        } as AssertStatement;
       },
 
       // 함수 내부 조기 return은 문법상 제거됨
