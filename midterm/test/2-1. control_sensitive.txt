@@ -4,11 +4,14 @@ main() {
   y = 0;
   z = 0;
   while (x > 0) {
+    assert(x > 0);
     z = z+x;
     if (17 > y) {
+      assert(17 > y);
       y = y+1;
     }
     x = x-1;
   }
+  assert(0 > x);
   return x;
 }
