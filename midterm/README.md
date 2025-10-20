@@ -2,6 +2,16 @@
 
 TIP (Tiny Imperative Programming) 언어를 파싱하여 AST를 생성하고, CFG/ICFG를 구성한 뒤 Interval Analysis(Widening/Narrowing 포함)를 수행합니다. 결과는 Graphviz DOT(및 선택적 PDF)와 JSON으로 출력됩니다.
 
+## 구현 내용
+
+- [x] Flow-sensitive 분석
+- [x] Interval analysis
+- [x] Widening
+- [x] Narrowing
+- [x] Control-sensitive analysis
+- [x] Inter-procedural analysis
+- [-] Context-sensitive analysis (k-callsite sensitivity w/ parameterized k)
+
 ## 파일 구조
 
 - `parser.ts` - TIP 파서 (Ohm.js 기반), 소스 → AST(`Program`)
