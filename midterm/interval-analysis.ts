@@ -246,16 +246,6 @@ function refineEnvByCondition(
       } else {
         out.set(vName, { lo: cur.lo, hi: Math.min(cur.hi, be.right.value) });
       }
-    } else if (isNum(be.left) && isVar(be.right)) {
-      const vName = ns(funcName, be.right.name);
-      const cur = out.get(vName) ?? Interval.top();
-      if (truthy) {
-        // c > y  => y < c  => y.hi <= c-1
-        out.set(vName, { lo: cur.lo, hi: Math.min(cur.hi, be.left.value - 1) });
-      } else {
-        // !(c > y) => y >= c
-        out.set(vName, { lo: Math.max(cur.lo, be.left.value), hi: cur.hi });
-      }
     }
     return out;
   }
