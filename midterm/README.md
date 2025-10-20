@@ -10,7 +10,7 @@ TIP (Tiny Imperative Programming) 언어를 파싱하여 AST를 생성하고, CF
 - [x] Narrowing
 - [x] Control-sensitive analysis
 - [x] Inter-procedural analysis
-- [-] Context-sensitive analysis (k-callsite sensitivity w/ parameterized k)
+- [-] Context-sensitive analysis (k-callsite sensitivity w/ parameterized k) (구현 못함)
 
 ## 파일 구조
 
