@@ -234,7 +234,7 @@ function refineEnvByCondition(
     e.type === "NumberLiteral";
 
   if (be.operator === ">") {
-    // left > right  (falsy는 left <= right)
+    // 형태 1) x > c
     if (isVar(be.left) && isNum(be.right)) {
       const vName = ns(funcName, be.left.name);
       const cur = out.get(vName) ?? Interval.top();
@@ -246,14 +246,54 @@ function refineEnvByCondition(
       } else {
         out.set(vName, { lo: cur.lo, hi: Math.min(cur.hi, be.right.value) });
       }
-    } else if (isNum(be.left) && isVar(be.right)) {
+      return out;
+    }
+    // 형태 2) c > x  ⇔  x < c
+    if (isNum(be.left) && isVar(be.right)) {
       const vName = ns(funcName, be.right.name);
       const cur = out.get(vName) ?? Interval.top();
       if (truthy) {
-        out.set(vName, { lo: Math.max(cur.lo, be.left.value), hi: cur.hi });
+        // x <= c-1
+        out.set(vName, { lo: cur.lo, hi: Math.min(cur.hi, be.left.value - 1) });
       } else {
-        out.set(vName, { lo: cur.lo, hi: Math.min(cur.hi, be.left.value) });
+        // x >= c
+        out.set(vName, { lo: Math.max(cur.lo, be.left.value), hi: cur.hi });
       }
+      return out;
+    }
+    return out;
+  }
+
+  if (be.operator === "==") {
+    // 형태 1) x == c
+    if (isVar(be.left) && isNum(be.right)) {
+      const vName = ns(funcName, be.left.name);
+      const cur = out.get(vName) ?? Interval.top();
+      if (truthy) {
+        const meet = Interval.meet(cur, Interval.ofConst(be.right.value));
+        out.set(vName, meet);
+      } else {
+        // 단일 점을 제외하는 것은 구간 도메인에서 표현 불가 → 보수적으로 유지
+        // 단, 현재가 정확히 [c,c]이면 모순이므로 bottom으로 정제
+        if (cur.lo === be.right.value && cur.hi === be.right.value) {
+          out.set(vName, Interval.bottom());
+        }
+      }
+      return out;
+    }
+    // 형태 2) c == x
+    if (isNum(be.left) && isVar(be.right)) {
+      const vName = ns(funcName, be.right.name);
+      const cur = out.get(vName) ?? Interval.top();
+      if (truthy) {
+        const meet = Interval.meet(cur, Interval.ofConst(be.left.value));
+        out.set(vName, meet);
+      } else {
+        if (cur.lo === be.left.value && cur.hi === be.left.value) {
+          out.set(vName, Interval.bottom());
+        }
+      }
+      return out;
     }
     return out;
   }
