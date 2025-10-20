@@ -12,6 +12,6 @@ main() {
     }
     x = x-1;
   }
-  assert(0 > x);
+  assert(1 > x);
   return x;
 }
