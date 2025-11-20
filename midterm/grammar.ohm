@@ -1,0 +1,73 @@
+TIP {
+  // 프로그램: 함수들의 시퀀스
+  Program = Function+
+
+  // 함수: x(x, ..., x){ (var x, ..., x;)? s return e; }
+  Function = identifier "(" Params? ")" "{" VarDecl? Statement* ReturnStmt "}"
+
+  Params = identifier ("," identifier)*
+  VarDecl = "var" identifier ("," identifier)* ";"
+
+  // 구문들
+  Statement = AssignmentStmt
+            | OutputStmt
+            | IfStmt
+            | WhileStmt
+            | CallStmt
+            | AssertStmt
+
+
+  AssignmentStmt = identifier "=" Expression ";"
+  OutputStmt = "output" Expression ";"
+  CallStmt = identifier "(" Args? ")" ";"
+  IfStmt = "if" "(" Expression ")" Block ElseClause?
+  ElseClause = "else" Block
+  WhileStmt = "while" "(" Expression ")" Block
+  ReturnStmt = "return" Expression ";"
+
+  AssertStmt = "assert" "(" Expression ")" ";"
+
+  Block = "{" BlockStatement* "}"
+  BlockStatement = Statement
+
+
+  // 표현식들 (우선순위 순서대로)
+  Expression = ComparisonExpr
+
+  ComparisonExpr = ComparisonExpr ">" ArithExpr    -- greater
+                 | ComparisonExpr "==" ArithExpr   -- equal
+                 | ArithExpr
+
+  ArithExpr = ArithExpr "+" MulExpr  -- add
+            | ArithExpr "-" MulExpr  -- sub
+            | MulExpr
+
+  MulExpr = MulExpr "*" UnaryExpr  -- mul
+          | MulExpr "/" UnaryExpr  -- div
+          | UnaryExpr
+
+  UnaryExpr = PrimaryExpr
+
+  PrimaryExpr = "input"                     -- input
+              | "(" Expression ")"          -- paren
+              | FunctionCallOrAccess
+              | number                      -- number
+              | identifier                  -- identifier
+
+  FunctionCallOrAccess = FunctionCallOrAccess "(" Args? ")"  -- call
+                       | identifier                           -- base
+
+
+
+  Args = Expression ("," Expression)*
+
+
+
+  // 기본 토큰들
+  identifier = letter (alnum | "_")*
+  number = digit+
+
+  // 공백 처리
+  space += comment
+  comment = "//" (~"\n" any)* "\n"
+}
